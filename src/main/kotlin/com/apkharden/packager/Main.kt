@@ -6,13 +6,18 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.apkharden.packager.ui.HardenScreen
+import javax.swing.UIManager
 
-fun main() = application {
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "ApkHarden",
-        state = rememberWindowState(width = 720.dp, height = 640.dp),
-    ) {
-        MaterialTheme { HardenScreen() }
+fun main() {
+    // Render the Swing file chooser with the native Windows look instead of the dated Metal theme.
+    runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+    application {
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "ApkHarden",
+            state = rememberWindowState(width = 720.dp, height = 640.dp),
+        ) {
+            MaterialTheme { HardenScreen() }
+        }
     }
 }
