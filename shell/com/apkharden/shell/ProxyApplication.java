@@ -24,7 +24,7 @@ public class ProxyApplication extends Application {
             Bundle md = readMetaData(base);
             String expectedHash = md.getString(Constants.META_SIG_HASH, "");
             realAppName = md.getString(Constants.META_APP_NAME, "");
-            int dexCount = md.getInt(Constants.META_DEX_COUNT, 0);
+            int dexCount = parseDexCount(md);
 
             // 1. Security checks (fail-closed).
             if (AntiDebug.isDetected(base) || !AntiTamper.verify(base, expectedHash)) {
@@ -42,6 +42,11 @@ public class ProxyApplication extends Application {
             // 3. In-memory classloader; parent = the boot PathClassLoader (holds shell classes).
             ClassLoader parent = base.getClassLoader();
             ClassLoader dexLoader = new dalvik.system.InMemoryDexClassLoader(buffers, parent);
+
+            // InMemoryDexClassLoader has no native library search path, so classes loaded by it
+            // would fail System.loadLibrary (e.g. libmmkv.so lives in the APK's lib/<abi>/).
+            // Copy the original PathClassLoader's native library paths onto our loader.
+            copyNativeLibraryPaths(parent, dexLoader);
 
             // 4. Swap LoadedApk.mClassLoader so the framework resolves original classes.
             replaceLoadedApkClassLoader(base, dexLoader);
@@ -75,6 +80,26 @@ public class ProxyApplication extends Application {
     }
 
     // ---- reflection helpers ----
+
+    // Copies the native library search path (DexPathList internals) from one classloader to another,
+    // so libraries bundled in the APK remain loadable from classes resolved by the in-memory loader.
+    private void copyNativeLibraryPaths(ClassLoader from, ClassLoader to) throws Exception {
+        Object fromList = field(from.getClass(), "pathList").get(from); // BaseDexClassLoader.pathList
+        Object toList = field(to.getClass(), "pathList").get(to);
+        String[] fields = {
+            "nativeLibraryDirectories",
+            "systemNativeLibraryDirectories",
+            "nativeLibraryPathElements", // the actual search array used by findLibrary()
+        };
+        for (String name : fields) {
+            try {
+                Field f = field(toList.getClass(), name);
+                f.set(toList, field(fromList.getClass(), name).get(fromList));
+            } catch (NoSuchFieldException ignored) {
+                // field set varies across Android versions; copy whatever exists
+            }
+        }
+    }
 
     private void replaceLoadedApkClassLoader(Context base, ClassLoader cl) throws Exception {
         Object loadedApk = field(base.getClass(), "mPackageInfo").get(base); // ContextImpl.mPackageInfo
@@ -110,6 +135,23 @@ public class ProxyApplication extends Application {
             }
         }
         throw new NoSuchFieldException(name);
+    }
+
+    // The packager writes DEX_COUNT into the manifest as a string ("1"), so Bundle.getInt
+    // returns the default 0 (logging "expected Integer but value was a java.lang.String").
+    // Read it type-tolerantly: a count of 0 means no dexes are decrypted and the in-memory
+    // class loader is fed an empty array, which aborts the process natively.
+    private int parseDexCount(Bundle md) {
+        Object v = md.get(Constants.META_DEX_COUNT);
+        if (v instanceof Number) return ((Number) v).intValue();
+        if (v instanceof String) {
+            try {
+                return Integer.parseInt(((String) v).trim());
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
     }
 
     private Bundle readMetaData(Context base) throws PackageManager.NameNotFoundException {

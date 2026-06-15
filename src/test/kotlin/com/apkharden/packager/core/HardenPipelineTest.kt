@@ -57,4 +57,32 @@ class HardenPipelineTest {
         }
         assertTrue(logs.isNotEmpty())
     }
+
+    @Test
+    fun `encrypted dex is compressed, not bloated to raw size`() {
+        // A realistic dex is compressible. The packager must deflate before encrypting so the
+        // encrypted asset stays small — otherwise the output APK balloons (regression guard).
+        val rawDex = ByteArray(2_000_000) { ((it / 64) % 16).toByte() } // ~2 MB, highly compressible
+        val manifest = AndroidManifestBlock().apply {
+            packageName = "com.example.demo"; refreshFull()
+        }.bytes
+        val input = File(tmp, "big.apk")
+        ZipOutputStream(input.outputStream()).use { z ->
+            z.putNextEntry(ZipEntry("AndroidManifest.xml")); z.write(manifest); z.closeEntry()
+            z.putNextEntry(ZipEntry("classes.dex")); z.write(rawDex); z.closeEntry()
+        }
+
+        val out = File(tmp, "big-hardened.apk")
+        HardenPipeline.harden(
+            input = input, output = out,
+            keystore = ks, storePass = "123456", alias = "test", keyPass = "123456",
+        )
+
+        ZipFile(out).use { z ->
+            val encSize = z.getEntry(Constants.encryptedDexEntry(0)).size
+            // Compressed+encrypted must be a fraction of the raw dex, not ≥ it.
+            assertTrue(encSize < rawDex.size / 2,
+                "encrypted dex ($encSize B) should be well under raw size (${rawDex.size} B)")
+        }
+    }
 }
