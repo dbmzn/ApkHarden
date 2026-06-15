@@ -1,7 +1,9 @@
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+
 plugins {
     kotlin("jvm") version "2.1.0"
-    application
-    // Compose Desktop plugin is added in Task 9.
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
+    id("org.jetbrains.compose") version "1.7.3"
 }
 
 repositories {
@@ -11,6 +13,7 @@ repositories {
 }
 
 dependencies {
+    implementation(compose.desktop.currentOs)
     implementation("com.android.tools.build:apksig:8.3.2")
     implementation("io.github.reandroid:ARSCLib:1.3.8")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
@@ -21,6 +24,13 @@ tasks.test { useJUnitPlatform() }
 
 kotlin { jvmToolchain(17) }
 
-application {
-    mainClass.set("com.apkharden.packager.MainKt")
+compose.desktop {
+    application {
+        mainClass = "com.apkharden.packager.MainKt"
+        nativeDistributions {
+            targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
+            packageName = "ApkHarden"
+            packageVersion = "1.0.0"
+        }
+    }
 }
