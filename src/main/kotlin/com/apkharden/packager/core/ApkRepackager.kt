@@ -29,7 +29,17 @@ object ApkRepackager {
                          name == "META-INF/MANIFEST.MF")
                     ) continue
 
+                    // Preserve the original compression method. resources.arsc and other
+                    // STORED entries must stay uncompressed (required on targetSdk 30+).
                     val copy = ZipEntry(name)
+                    if (e.method == ZipEntry.STORED) {
+                        copy.method = ZipEntry.STORED
+                        copy.size = e.size
+                        copy.compressedSize = e.size
+                        copy.crc = e.crc
+                    } else {
+                        copy.method = ZipEntry.DEFLATED
+                    }
                     zout.putNextEntry(copy)
                     zin.getInputStream(e).use { it.copyTo(zout) }
                     zout.closeEntry()
