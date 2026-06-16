@@ -54,14 +54,18 @@ public class ProxyApplication extends Application {
             }
 
             // 3. File-backed classloader. optimizedDirectory is honoured pre-API-26 and ignored
-            //    after (ART manages the oat next to the dex either way); the native lib dir lets
-            //    System.loadLibrary find libraries bundled in the APK.
+            //    after (ART manages the oat next to the dex either way).
             File oatDir = new File(cacheDir, "oat");
             oatDir.mkdirs();
             String nativeLibDir = base.getApplicationInfo().nativeLibraryDir;
             ClassLoader parent = base.getClassLoader();
             ClassLoader dexLoader = new dalvik.system.DexClassLoader(
                     dexPath.toString(), oatDir.getAbsolutePath(), nativeLibDir, parent);
+
+            // ApplicationInfo.nativeLibraryDir only points at the extracted lib dir, which is empty
+            // when extractNativeLibs=false (libs stay inside base.apk!/lib/<abi>/). Copy the original
+            // PathClassLoader's full native search path so System.loadLibrary still resolves them.
+            copyNativeLibraryPaths(parent, dexLoader);
 
             // 4. Swap LoadedApk.mClassLoader so the framework resolves original classes.
             replaceLoadedApkClassLoader(base, dexLoader);
@@ -95,6 +99,27 @@ public class ProxyApplication extends Application {
     }
 
     // ---- reflection helpers ----
+
+    // Copies the native library search path (DexPathList internals) from one classloader to another,
+    // so libraries bundled in the APK (base.apk!/lib/<abi>/ when extractNativeLibs=false) remain
+    // loadable from classes resolved by our dex loader.
+    private void copyNativeLibraryPaths(ClassLoader from, ClassLoader to) throws Exception {
+        Object fromList = field(from.getClass(), "pathList").get(from); // BaseDexClassLoader.pathList
+        Object toList = field(to.getClass(), "pathList").get(to);
+        String[] fields = {
+            "nativeLibraryDirectories",
+            "systemNativeLibraryDirectories",
+            "nativeLibraryPathElements", // the actual search array used by findLibrary()
+        };
+        for (String name : fields) {
+            try {
+                Field f = field(toList.getClass(), name);
+                f.set(toList, field(fromList.getClass(), name).get(fromList));
+            } catch (NoSuchFieldException ignored) {
+                // field set varies across Android versions; copy whatever exists
+            }
+        }
+    }
 
     private void replaceLoadedApkClassLoader(Context base, ClassLoader cl) throws Exception {
         Object loadedApk = field(base.getClass(), "mPackageInfo").get(base); // ContextImpl.mPackageInfo
