@@ -3,15 +3,19 @@ package com.apkharden.shell;
 import android.app.Application;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Process;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 public class ProxyApplication extends Application {
@@ -32,21 +36,32 @@ public class ProxyApplication extends Application {
                 return;
             }
 
-            // 2. Decrypt original dexes into memory.
-            ByteBuffer[] buffers = new ByteBuffer[dexCount];
+            // 2. Decrypt original dexes to an app-private, version-keyed cache. Persisting them
+            //    (instead of holding them in memory) lets ART build and reuse an oat file, so the
+            //    real code runs AOT-compiled — near-original performance. Re-decrypt only when a
+            //    cache file is missing or invalid (e.g. first launch, or after an app update where
+            //    the versionCode — and thus the cache dir — changes).
+            File cacheDir = base.getDir("apkharden_" + versionCode(base), Context.MODE_PRIVATE);
+            StringBuilder dexPath = new StringBuilder();
             for (int i = 0; i < dexCount; i++) {
-                byte[] enc = readAsset(base, Constants.ENC_DIR + "/" + i);
-                buffers[i] = ByteBuffer.wrap(DexDecryptor.decrypt(enc));
+                File out = new File(cacheDir, "c" + i + ".dex");
+                if (!isValidDex(out)) {
+                    byte[] plain = DexDecryptor.decrypt(readAsset(base, Constants.ENC_DIR + "/" + i));
+                    atomicWrite(out, plain);
+                }
+                if (dexPath.length() > 0) dexPath.append(File.pathSeparatorChar);
+                dexPath.append(out.getAbsolutePath());
             }
 
-            // 3. In-memory classloader; parent = the boot PathClassLoader (holds shell classes).
+            // 3. File-backed classloader. optimizedDirectory is honoured pre-API-26 and ignored
+            //    after (ART manages the oat next to the dex either way); the native lib dir lets
+            //    System.loadLibrary find libraries bundled in the APK.
+            File oatDir = new File(cacheDir, "oat");
+            oatDir.mkdirs();
+            String nativeLibDir = base.getApplicationInfo().nativeLibraryDir;
             ClassLoader parent = base.getClassLoader();
-            ClassLoader dexLoader = new dalvik.system.InMemoryDexClassLoader(buffers, parent);
-
-            // InMemoryDexClassLoader has no native library search path, so classes loaded by it
-            // would fail System.loadLibrary (e.g. libmmkv.so lives in the APK's lib/<abi>/).
-            // Copy the original PathClassLoader's native library paths onto our loader.
-            copyNativeLibraryPaths(parent, dexLoader);
+            ClassLoader dexLoader = new dalvik.system.DexClassLoader(
+                    dexPath.toString(), oatDir.getAbsolutePath(), nativeLibDir, parent);
 
             // 4. Swap LoadedApk.mClassLoader so the framework resolves original classes.
             replaceLoadedApkClassLoader(base, dexLoader);
@@ -80,26 +95,6 @@ public class ProxyApplication extends Application {
     }
 
     // ---- reflection helpers ----
-
-    // Copies the native library search path (DexPathList internals) from one classloader to another,
-    // so libraries bundled in the APK remain loadable from classes resolved by the in-memory loader.
-    private void copyNativeLibraryPaths(ClassLoader from, ClassLoader to) throws Exception {
-        Object fromList = field(from.getClass(), "pathList").get(from); // BaseDexClassLoader.pathList
-        Object toList = field(to.getClass(), "pathList").get(to);
-        String[] fields = {
-            "nativeLibraryDirectories",
-            "systemNativeLibraryDirectories",
-            "nativeLibraryPathElements", // the actual search array used by findLibrary()
-        };
-        for (String name : fields) {
-            try {
-                Field f = field(toList.getClass(), name);
-                f.set(toList, field(fromList.getClass(), name).get(fromList));
-            } catch (NoSuchFieldException ignored) {
-                // field set varies across Android versions; copy whatever exists
-            }
-        }
-    }
 
     private void replaceLoadedApkClassLoader(Context base, ClassLoader cl) throws Exception {
         Object loadedApk = field(base.getClass(), "mPackageInfo").get(base); // ContextImpl.mPackageInfo
@@ -152,6 +147,48 @@ public class ProxyApplication extends Application {
             }
         }
         return 0;
+    }
+
+    private int versionCode(Context base) {
+        try {
+            PackageInfo pi = base.getPackageManager().getPackageInfo(base.getPackageName(), 0);
+            return pi.versionCode; // deprecated on API 28+ but still correct; fine at min-api 23
+        } catch (PackageManager.NameNotFoundException e) {
+            return 0;
+        }
+    }
+
+    // A cached dex is usable only if it exists and starts with the dex magic ("dex\n"). Guards
+    // against a half-written file from a process killed mid-write.
+    private static boolean isValidDex(File f) {
+        if (!f.exists() || f.length() < 40) return false;
+        InputStream in = null;
+        try {
+            in = new FileInputStream(f);
+            byte[] magic = new byte[4];
+            if (in.read(magic) != 4) return false;
+            return magic[0] == 'd' && magic[1] == 'e' && magic[2] == 'x' && magic[3] == '\n';
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (in != null) try { in.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    // Write to a temp file + fsync + rename, so a reader never sees a partially-written dex.
+    private static void atomicWrite(File out, byte[] data) throws IOException {
+        File tmp = new File(out.getAbsolutePath() + ".tmp");
+        FileOutputStream fos = new FileOutputStream(tmp);
+        try {
+            fos.write(data);
+            fos.getFD().sync();
+        } finally {
+            fos.close();
+        }
+        if (!tmp.renameTo(out)) {
+            out.delete();
+            if (!tmp.renameTo(out)) throw new IOException("cache rename failed: " + out);
+        }
     }
 
     private Bundle readMetaData(Context base) throws PackageManager.NameNotFoundException {
