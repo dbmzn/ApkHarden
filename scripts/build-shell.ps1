@@ -34,7 +34,7 @@ $dexOut = Join-Path $root "build\shell-dex"
 Remove-Item $dexOut -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $dexOut | Out-Null
 $classes = Get-ChildItem $out -Recurse -Filter *.class | ForEach-Object { $_.FullName }
-& $d8 --min-api 26 --output $dexOut $classes --lib $androidJar
+& $d8 --min-api 23 --output $dexOut $classes --lib $androidJar
 
 New-Item -ItemType Directory -Force (Join-Path $root "src\main\resources") | Out-Null
 Copy-Item (Join-Path $dexOut "classes.dex") (Join-Path $root "src\main\resources\shell.dex") -Force
