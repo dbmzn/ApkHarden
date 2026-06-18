@@ -70,6 +70,10 @@ compose.desktop {
             targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
             packageName = "ApkHarden"
             packageVersion = "1.0.0"
+            // LWJGL (NFD) needs sun.misc.Unsafe from jdk.unsupported; jlink drops it by default,
+            // which crashes the native file dialog in the packaged app (works under `gradlew run`
+            // because that uses the full JDK).
+            modules("jdk.unsupported")
         }
     }
 }
