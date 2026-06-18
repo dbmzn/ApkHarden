@@ -7,6 +7,7 @@ object ManifestPatcher {
 
     private const val ID_name = 0x01010003   // android:name
     private const val ID_value = 0x01010024  // android:value
+    private const val ID_appComponentFactory = 0x0101057a  // android:appComponentFactory (API 28+)
 
     fun readApplicationClass(manifestBytes: ByteArray): String? {
         val m = AndroidManifestBlock.load(manifestBytes.inputStream())
@@ -35,6 +36,13 @@ object ManifestPatcher {
 
         val app = m.applicationElement
             ?: throw IllegalStateException("Manifest has no <application> element")
+
+        // Strip android:appComponentFactory. Under hardening the original dex (which holds the
+        // factory class, e.g. androidx.core.app.CoreComponentFactory) is moved out of base.apk, so
+        // the framework hits ClassNotFoundException for it in every process — before our ClassLoader
+        // swap can help. The factory is the no-op AndroidX default here, so dropping it is safe and
+        // removes the per-process LoadedApk error noise.
+        app.searchAttributeByResourceId(ID_appComponentFactory)?.let { app.removeAttribute(it) }
 
         addMeta(app, Constants.META_APP_NAME, originalAppClass ?: "")
         addMeta(app, Constants.META_SIG_HASH, sigHash)

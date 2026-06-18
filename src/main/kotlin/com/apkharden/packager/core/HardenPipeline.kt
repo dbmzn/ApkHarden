@@ -30,9 +30,12 @@ object HardenPipeline {
         val (manifestBytes, originalApp, encryptedDexes) = ApkReader(input).use { r ->
             val dexes = r.dexNames()
             require(dexes.isNotEmpty()) { "APK contains no classes.dex" }
-            log("Encrypting ${dexes.size} dex file(s)…")
-            val enc = dexes.map { DexEncryptor.encrypt(r.read(it)) }
+            val rawDexes = dexes.map { r.read(it) }
             val manifest = r.manifestBytes()
+            log("Linting for hardening-fragile patterns…")
+            HardenLinter.lint(r.entryNames(), manifest, rawDexes, log)
+            log("Encrypting ${dexes.size} dex file(s)…")
+            val enc = rawDexes.map { DexEncryptor.encrypt(it) }
             Triple(manifest, ManifestPatcher.readApplicationClass(manifest), enc)
         }
 

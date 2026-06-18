@@ -24,6 +24,16 @@ tasks.test { useJUnitPlatform() }
 
 kotlin { jvmToolchain(17) }
 
+// Headless harden for CI / scripting:
+//   ./gradlew harden --args="--input in.apk --output out.apk --keystore k.jks \
+//       --storePass p --alias a --keyPass p"
+tasks.register<JavaExec>("harden") {
+    group = "apkharden"
+    description = "Run the harden pipeline headlessly (see CliKt)."
+    mainClass.set("com.apkharden.packager.CliKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+
 compose.desktop {
     application {
         mainClass = "com.apkharden.packager.MainKt"
