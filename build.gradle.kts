@@ -12,11 +12,26 @@ repositories {
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
+// LWJGL's NFD binding wraps the OS-native file dialog (IFileOpenDialog on Windows), giving the
+// real resizable Explorer dialog with the Quick Access sidebar instead of Swing/AWT's tiny ones.
+val lwjglVersion = "3.3.3"
+val lwjglNatives = System.getProperty("os.name").lowercase().let { os ->
+    when {
+        os.contains("win") -> "natives-windows"
+        os.contains("mac") -> "natives-macos"
+        else -> "natives-linux"
+    }
+}
+
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation("com.android.tools.build:apksig:8.3.2")
     implementation("io.github.reandroid:ARSCLib:1.3.8")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    implementation("org.lwjgl:lwjgl:$lwjglVersion")
+    implementation("org.lwjgl:lwjgl-nfd:$lwjglVersion")
+    runtimeOnly("org.lwjgl:lwjgl:$lwjglVersion:$lwjglNatives")
+    runtimeOnly("org.lwjgl:lwjgl-nfd:$lwjglVersion:$lwjglNatives")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
 }
 

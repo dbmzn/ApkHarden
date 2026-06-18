@@ -12,10 +12,15 @@ import com.apkharden.packager.core.HardenPipeline
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.awt.Dimension
+import org.lwjgl.system.MemoryStack
+import org.lwjgl.util.nfd.NFDFilterItem
+import org.lwjgl.util.nfd.NativeFileDialog.NFD_FreePath
+import org.lwjgl.util.nfd.NativeFileDialog.NFD_Init
+import org.lwjgl.util.nfd.NativeFileDialog.NFD_OKAY
+import org.lwjgl.util.nfd.NativeFileDialog.NFD_OpenDialog
+import org.lwjgl.util.nfd.NativeFileDialog.NFD_Quit
+import org.lwjgl.util.nfd.NativeFileDialog.NFD_SaveDialog
 import java.io.File
-import javax.swing.JFileChooser
-import javax.swing.filechooser.FileNameExtensionFilter
 
 @Composable
 fun HardenScreen() {
@@ -29,22 +34,37 @@ fun HardenScreen() {
     val logs = remember { mutableStateListOf<String>() }
     val scope = rememberCoroutineScope()
 
+    // Drive the OS-native file dialog through LWJGL's NFD binding. On Windows this is the modern
+    // IFileOpenDialog — the full resizable Explorer dialog with the Quick Access sidebar — instead
+    // of Swing's JFileChooser or AWT's tiny legacy GetOpenFileName window.
     fun pick(
-        title: String,
+        filterName: String? = null,
         save: Boolean = false,
-        filterDesc: String? = null,
         extensions: List<String> = emptyList(),
     ): String? {
-        val chooser = JFileChooser().apply {
-            dialogTitle = title
-            preferredSize = Dimension(900, 600) // larger than the default ~500×330
-            isFileHidingEnabled = false
-            if (filterDesc != null && extensions.isNotEmpty()) {
-                fileFilter = FileNameExtensionFilter(filterDesc, *extensions.toTypedArray())
+        NFD_Init()
+        try {
+            MemoryStack.stackPush().use { stack ->
+                val outPath = stack.mallocPointer(1)
+                val filters = if (extensions.isNotEmpty()) {
+                    val items = NFDFilterItem.malloc(1, stack)
+                    // spec is a comma-separated extension list, e.g. "jks,keystore,p12,bks".
+                    items[0].name(stack.UTF8(filterName ?: "支持的文件"))
+                        .spec(stack.UTF8(extensions.joinToString(",")))
+                    items
+                } else null
+                val result = if (save)
+                    NFD_SaveDialog(outPath, filters, null as CharSequence?, null as CharSequence?)
+                else
+                    NFD_OpenDialog(outPath, filters, null as CharSequence?)
+                if (result != NFD_OKAY) return null
+                val path = outPath.getStringUTF8(0)
+                NFD_FreePath(outPath.get(0))
+                return path
             }
+        } finally {
+            NFD_Quit()
         }
-        val result = if (save) chooser.showSaveDialog(null) else chooser.showOpenDialog(null)
-        return if (result == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
     }
 
     val logScroll = rememberScrollState()
@@ -62,46 +82,48 @@ fun HardenScreen() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             fileRow("输入 APK", inputApk, { inputApk = it }) {
-                pick("选择 APK", filterDesc = "APK 文件 (*.apk)", extensions = listOf("apk"))?.let { p ->
+                pick("APK 文件", extensions = listOf("apk"))?.let { p ->
                     inputApk = p
                     if (outputApk.isBlank()) outputApk = p.removeSuffix(".apk") + "-hardened.apk"
                 }
             }
             fileRow("输出 APK", outputApk, { outputApk = it }) {
-                pick("输出 APK", save = true, filterDesc = "APK 文件 (*.apk)", extensions = listOf("apk"))?.let { outputApk = it }
+                pick("APK 文件", save = true, extensions = listOf("apk"))?.let { outputApk = it }
             }
             fileRow("Keystore", keystore, { keystore = it }) {
-                pick("选择 keystore", filterDesc = "Keystore (*.jks, *.keystore, *.p12, *.bks)",
-                    extensions = listOf("jks", "keystore", "p12", "bks"))?.let { keystore = it }
+                pick("Keystore", extensions = listOf("jks", "keystore", "p12", "bks"))?.let { keystore = it }
             }
 
             OutlinedTextField(alias, { alias = it }, label = { Text("别名 alias") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(storePass, { storePass = it }, label = { Text("keystore 密码") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(keyPass, { keyPass = it }, label = { Text("key 密码") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-
-            Button(
-                enabled = !running && inputApk.isNotBlank() && outputApk.isNotBlank() && keystore.isNotBlank() && alias.isNotBlank(),
-                onClick = {
-                    logs.clear(); running = true
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) {
-                                HardenPipeline.harden(
-                                    input = File(inputApk), output = File(outputApk),
-                                    keystore = File(keystore), storePass = storePass, alias = alias, keyPass = keyPass,
-                                    log = { line -> scope.launch { logs.add(line) } },
-                                )
-                            }
-                            logs.add("✅ 加固成功")
-                        } catch (e: Throwable) {
-                            logs.add("❌ 失败: ${e.message}")
-                        } finally {
-                            running = false
-                        }
-                    }
-                },
-            ) { Text(if (running) "加固中…" else "开始加固") }
         }
+
+        // Pinned action bar: always visible below the (scrollable) form, so the primary action
+        // never sits below the fold.
+        Button(
+            enabled = !running && inputApk.isNotBlank() && outputApk.isNotBlank() && keystore.isNotBlank() && alias.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            onClick = {
+                logs.clear(); running = true
+                scope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            HardenPipeline.harden(
+                                input = File(inputApk), output = File(outputApk),
+                                keystore = File(keystore), storePass = storePass, alias = alias, keyPass = keyPass,
+                                log = { line -> scope.launch { logs.add(line) } },
+                            )
+                        }
+                        logs.add("✅ 加固成功")
+                    } catch (e: Throwable) {
+                        logs.add("❌ 失败: ${e.message}")
+                    } finally {
+                        running = false
+                    }
+                }
+            },
+        ) { Text(if (running) "加固中…" else "开始加固") }
 
         Divider(Modifier.padding(vertical = 8.dp))
         Text("日志", style = MaterialTheme.typography.subtitle2, modifier = Modifier.padding(bottom = 4.dp))
