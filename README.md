@@ -2,13 +2,15 @@
 
 一个自包含的 Android APK 基础加固工具（Compose Desktop GUI），对齐「360 免费加固」基础套餐：
 
-- **DEX 整体加壳**：deflate + AES 加密原始 `classes*.dex`，运行时解密到 app 私有目录（按 `versionCode` 隔离），用 `DexClassLoader` 加载——ART 可生成并复用 oat，性能接近原包
+- **DEX 整体加壳**：deflate + AES 加密原始 `classes*.dex`，运行时解密到 app 私有目录（按 `versionCode` 隔离），把解密 dex **合并进宿主 `PathClassLoader`**（而非子 DexClassLoader，保证壳 / 明文 / 解密 dex 三方类引用双向可解析）——ART 可生成并复用 oat，性能接近原包
 - **防二次打包**：运行时校验签名 SHA-256，不符即退出
 - **基础反调试**：检测调试器 / `TracerPid` / `FLAG_DEBUGGABLE`
+- **加固前静态检查**：扫描输入 APK，对加固后易静默失效的写法（TheRouter/ARouter 扫 dex、blankj `getTopActivity`、AndroidX Startup、多进程等）给出警告提示（仅警告、不阻断）
+- **签名**：输出包以 V1+V2+V3 方案签名并校验
 
 minSdk 23（Android 6.0）+。打包全程纯 JVM 库（[apksig](https://android.googlesource.com/platform/tools/apksig/) 签名 + [ARSCLib](https://github.com/REAndroid/ARSCLib) 改 manifest），用户无需安装 Android SDK。
 
-> **加载方式**：早期用 `InMemoryDexClassLoader`（仅 API 26+、无 AOT、运行慢），现改为「解密落盘 + `DexClassLoader`」——兼容下限降到 Android 6.0，且能用 AOT。代价：**首次启动**（或 app 升级后首启）需一次性解密 + `dex2oat`（大包数秒），之后冷启动复用 oat。明文 dex 持久驻留在 app 私有目录（沙箱级保护）。
+> **加载方式**：早期用 `InMemoryDexClassLoader`（仅 API 26+、无 AOT、运行慢），现改为「解密落盘 + 合并进宿主 `PathClassLoader`」——兼容下限降到 Android 6.0，且能用 AOT。代价：**首次启动**（或 app 升级后首启）需一次性解密 + `dex2oat`（大包数秒），之后冷启动复用 oat。明文 dex 持久驻留在 app 私有目录（沙箱级保护）。多进程冷启动用跨进程文件锁串行化解密，避免并发写出损坏的 dex。
 
 ## 结构
 
@@ -24,14 +26,17 @@ minSdk 23（Android 6.0）+。打包全程纯 JVM 库（[apksig](https://android
 ```
 ./gradlew run
 ```
-界面里选输入 APK、输出路径、keystore（.jks）+ 别名 + 密码，点「开始加固」。
+界面里选输入 APK、输出路径、keystore（.jks）+ 别名 + 密码，点「开始加固」。文件选择走系统原生对话框（Windows 上为现代资源管理器，含快速访问栏），由 LWJGL NFD 驱动。
 
 ## 开发
 
 ```
-./gradlew test           # 运行单元 + 集成测试
+./gradlew test              # 运行单元 + 集成测试
+./gradlew deployToDesktop   # 打包发行版并镜像到 ~/ApkHarden（桌面快捷方式指向处），先关掉运行中的实例
 $env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-shell.ps1   # 改了 shell/ 后重建 shell.dex
 ```
+
+> 打包发行版会显式带上 `jdk.unsupported` 模块：LWJGL 初始化依赖 `sun.misc.Unsafe`，jlink 默认会裁掉它，导致打包后（而非 `gradlew run`）文件对话框崩溃。
 
 壳的反射接管需在真机/模拟器验证，见 [samples/README.md](samples/README.md)。
 
