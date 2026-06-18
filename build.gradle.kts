@@ -49,6 +49,20 @@ tasks.register<JavaExec>("harden") {
     classpath = sourceSets["main"].runtimeClasspath
 }
 
+// One-shot: rebuild the native app image and mirror it to the deployed copy the desktop
+// shortcut points at (~/ApkHarden). Sync deletes stale files so the deploy stays clean.
+//   ./gradlew deployToDesktop      (close the running app first, or the .exe stays locked)
+tasks.register<Sync>("deployToDesktop") {
+    group = "apkharden"
+    description = "Build the distributable and mirror it to the deployed ~/ApkHarden copy."
+    dependsOn("createDistributable")
+    val deployDir = File(System.getProperty("user.home"), "ApkHarden")
+    // jpackage marks the launcher .exe read-only; clear it so the mirror can overwrite in place.
+    doFirst { deployDir.walkTopDown().forEach { it.setWritable(true) } }
+    from(layout.buildDirectory.dir("compose/binaries/main/app/ApkHarden"))
+    into(deployDir)
+}
+
 compose.desktop {
     application {
         mainClass = "com.apkharden.packager.MainKt"
