@@ -1,4 +1,4 @@
-package com.apkharden.packager.ui
+package com.apkharden.packager.ui.harden
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
