@@ -3,6 +3,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 plugins {
     kotlin("jvm") version "2.1.0"
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.0"
     id("org.jetbrains.compose") version "1.7.3"
 }
 
@@ -27,6 +28,8 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation("com.android.tools.build:apksig:8.3.2")
     implementation("io.github.reandroid:ARSCLib:1.3.8")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("com.android.tools.smali:smali-dexlib2:3.0.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.lwjgl:lwjgl:$lwjglVersion")
     implementation("org.lwjgl:lwjgl-nfd:$lwjglVersion")
