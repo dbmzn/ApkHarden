@@ -9,17 +9,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.HardenPipeline
+import com.apkharden.packager.ui.common.pickFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.lwjgl.system.MemoryStack
-import org.lwjgl.util.nfd.NFDFilterItem
-import org.lwjgl.util.nfd.NativeFileDialog.NFD_FreePath
-import org.lwjgl.util.nfd.NativeFileDialog.NFD_Init
-import org.lwjgl.util.nfd.NativeFileDialog.NFD_OKAY
-import org.lwjgl.util.nfd.NativeFileDialog.NFD_OpenDialog
-import org.lwjgl.util.nfd.NativeFileDialog.NFD_Quit
-import org.lwjgl.util.nfd.NativeFileDialog.NFD_SaveDialog
 import java.io.File
 
 @Composable
@@ -33,39 +26,6 @@ fun HardenScreen() {
     var running by remember { mutableStateOf(false) }
     val logs = remember { mutableStateListOf<String>() }
     val scope = rememberCoroutineScope()
-
-    // Drive the OS-native file dialog through LWJGL's NFD binding. On Windows this is the modern
-    // IFileOpenDialog — the full resizable Explorer dialog with the Quick Access sidebar — instead
-    // of Swing's JFileChooser or AWT's tiny legacy GetOpenFileName window.
-    fun pick(
-        filterName: String? = null,
-        save: Boolean = false,
-        extensions: List<String> = emptyList(),
-    ): String? {
-        NFD_Init()
-        try {
-            MemoryStack.stackPush().use { stack ->
-                val outPath = stack.mallocPointer(1)
-                val filters = if (extensions.isNotEmpty()) {
-                    val items = NFDFilterItem.malloc(1, stack)
-                    // spec is a comma-separated extension list, e.g. "jks,keystore,p12,bks".
-                    items[0].name(stack.UTF8(filterName ?: "支持的文件"))
-                        .spec(stack.UTF8(extensions.joinToString(",")))
-                    items
-                } else null
-                val result = if (save)
-                    NFD_SaveDialog(outPath, filters, null as CharSequence?, null as CharSequence?)
-                else
-                    NFD_OpenDialog(outPath, filters, null as CharSequence?)
-                if (result != NFD_OKAY) return null
-                val path = outPath.getStringUTF8(0)
-                NFD_FreePath(outPath.get(0))
-                return path
-            }
-        } finally {
-            NFD_Quit()
-        }
-    }
 
     val logScroll = rememberScrollState()
     // Keep the newest log line in view as the pipeline appends output.
@@ -82,16 +42,16 @@ fun HardenScreen() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             fileRow("输入 APK", inputApk, { inputApk = it }) {
-                pick("APK 文件", extensions = listOf("apk"))?.let { p ->
+                pickFile("APK 文件", extensions = listOf("apk"))?.let { p ->
                     inputApk = p
                     if (outputApk.isBlank()) outputApk = p.removeSuffix(".apk") + "-hardened.apk"
                 }
             }
             fileRow("输出 APK", outputApk, { outputApk = it }) {
-                pick("APK 文件", save = true, extensions = listOf("apk"))?.let { outputApk = it }
+                pickFile("APK 文件", save = true, extensions = listOf("apk"))?.let { outputApk = it }
             }
             fileRow("Keystore", keystore, { keystore = it }) {
-                pick("Keystore", extensions = listOf("jks", "keystore", "p12", "bks"))?.let { keystore = it }
+                pickFile("Keystore", extensions = listOf("jks", "keystore", "p12", "bks"))?.let { keystore = it }
             }
 
             OutlinedTextField(alias, { alias = it }, label = { Text("别名 alias") }, singleLine = true, modifier = Modifier.fillMaxWidth())
