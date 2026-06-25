@@ -5,7 +5,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.apkharden.packager.ui.harden.HardenScreen
+import com.apkharden.packager.ui.App
 import javax.swing.UIManager
 
 fun main() {
@@ -15,9 +15,9 @@ fun main() {
         Window(
             onCloseRequest = ::exitApplication,
             title = "ApkHarden",
-            state = rememberWindowState(width = 720.dp, height = 640.dp),
+            state = rememberWindowState(width = 820.dp, height = 660.dp),
         ) {
-            MaterialTheme { HardenScreen() }
+            MaterialTheme { App() }
         }
     }
 }
