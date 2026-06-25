@@ -23,7 +23,7 @@ class ComplianceFileDetector : Detector {
                 else -> null
             }
             if (triggered != null) {
-                out += Finding("合规配置", c.severity, c.id.replaceFirstChar { it.uppercase() },
+                out += Finding("合规配置", c.severity, c.title,
                     triggered.first, triggered.second, c.advice, "compliance:${c.id}")
             }
         }

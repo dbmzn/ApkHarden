@@ -30,9 +30,12 @@ class ReportExporterTest {
         assertTrue(html.trimStart().startsWith("<!DOCTYPE html>"))
         assertTrue(html.contains("读取 IMEI"))
         assertTrue(html.contains("<style>"))
-        assertFalse(html.contains("http://"))
-        assertFalse(html.contains("https://"))
+        // Self-contained = no tags that load remote resources. (advice text MAY legitimately
+        // contain a URL string, e.g. an SDK privacy-policy link — that's content, not a fetch.)
         assertFalse(html.contains("<script"))
+        assertFalse(html.contains("<link"))
+        assertFalse(html.contains("href="))
+        assertFalse(html.contains("src="))
     }
 
     @Test

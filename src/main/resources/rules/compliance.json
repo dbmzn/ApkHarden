@@ -1,10 +1,10 @@
 {
   "checks": [
-    { "id": "min-target-sdk", "type": "TARGET_SDK_MIN", "value": 31, "severity": "MEDIUM",
+    { "id": "min-target-sdk", "type": "TARGET_SDK_MIN", "title": "targetSdk 过低", "value": 31, "severity": "MEDIUM",
       "advice": "应用市场普遍要求 targetSdk≥31，过低可能被拒/下架" },
-    { "id": "debuggable", "type": "DEBUGGABLE_FALSE", "severity": "HIGH",
+    { "id": "debuggable", "type": "DEBUGGABLE_FALSE", "title": "发布包开启了调试", "severity": "HIGH",
       "advice": "发布包不应 android:debuggable=true，会暴露调试入口" },
-    { "id": "allow-backup", "type": "ALLOW_BACKUP_FALSE", "severity": "LOW",
+    { "id": "allow-backup", "type": "ALLOW_BACKUP_FALSE", "title": "允许应用数据备份", "severity": "LOW",
       "advice": "android:allowBackup=true 可能经 adb 备份泄露应用数据，建议关闭" }
   ]
 }

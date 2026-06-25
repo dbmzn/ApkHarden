@@ -10,6 +10,8 @@ class ScanContext(
     val apkName: String,
     val manifest: ManifestInfo,
     val dexIndex: DexIndex,
+    // APK 内所有 zip 条目名。预留给「隐私政策资源/明文配置」类合规检查（见 plan 末尾 follow-up），
+    // 当前 ComplianceFileDetector 只查 manifest 安全位，尚未消费此字段。
     val entryNames: List<String>,
     val rules: RuleSet,
 )

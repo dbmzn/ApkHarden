@@ -33,7 +33,7 @@ class PrivacyScannerTest {
         sdk = """{"sdks":[{"id":"demo","name":"演示SDK","category":"统计分析","packages":["com/example/sdkdemo/"]}]}""",
         api = """{"apis":[{"id":"demo-api","title":"演示调用","category":"设备标识","severity":"HIGH","methods":["Lcom/example/sdkdemo/TrackingSdk;->helper"],"advice":"a"}]}""",
         perm = """{"permissions":[{"name":"android.permission.READ_PHONE_STATE","title":"读取电话状态","category":"设备标识","severity":"HIGH","advice":"a"}]}""",
-        compliance = """{"checks":[{"id":"dbg","type":"DEBUGGABLE_FALSE","severity":"HIGH","advice":"a"}]}""",
+        compliance = """{"checks":[{"id":"dbg","type":"DEBUGGABLE_FALSE","title":"开启调试","severity":"HIGH","advice":"a"}]}""",
     )
 
     @Test

@@ -38,6 +38,7 @@ data class PermissionRule(
 data class ComplianceCheck(
     val id: String,
     val type: String,
+    val title: String,
     val value: Int? = null,
     val severity: Severity,
     val advice: String,

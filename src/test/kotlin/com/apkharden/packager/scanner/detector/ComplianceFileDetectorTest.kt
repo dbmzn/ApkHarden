@@ -10,9 +10,9 @@ class ComplianceFileDetectorTest {
     private val rules = RuleSet.fromJson(
         sdk = """{"sdks":[]}""", api = """{"apis":[]}""", perm = """{"permissions":[]}""",
         compliance = """{"checks":[
-            {"id":"sdk31","type":"TARGET_SDK_MIN","value":31,"severity":"MEDIUM","advice":"升级 targetSdk"},
-            {"id":"dbg","type":"DEBUGGABLE_FALSE","severity":"HIGH","advice":"关闭 debuggable"},
-            {"id":"bak","type":"ALLOW_BACKUP_FALSE","severity":"LOW","advice":"关闭备份"}
+            {"id":"sdk31","type":"TARGET_SDK_MIN","title":"targetSdk 过低","value":31,"severity":"MEDIUM","advice":"升级 targetSdk"},
+            {"id":"dbg","type":"DEBUGGABLE_FALSE","title":"开启调试","severity":"HIGH","advice":"关闭 debuggable"},
+            {"id":"bak","type":"ALLOW_BACKUP_FALSE","title":"允许备份","severity":"LOW","advice":"关闭备份"}
         ]}""",
     )
 
