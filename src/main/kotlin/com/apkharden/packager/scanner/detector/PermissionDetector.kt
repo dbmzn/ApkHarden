@@ -17,7 +17,7 @@ class PermissionDetector : Detector {
             } else {
                 Finding("其它权限", Severity.INFO, "申请了未分类权限",
                     "申请权限 $perm", "AndroidManifest.xml",
-                    "确认该权限确有业务必要；非必要应移除。", "perm:unknown")
+                    "未在规则库分类。若涉及个人信息，确认已声明用途并按最小必要原则申请。", "perm:unknown")
             }
         }
     }
