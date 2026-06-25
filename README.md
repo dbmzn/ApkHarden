@@ -12,6 +12,30 @@ minSdk 23（Android 6.0）+。打包全程纯 JVM 库（[apksig](https://android
 
 > **加载方式**：早期用 `InMemoryDexClassLoader`（仅 API 26+、无 AOT、运行慢），现改为「解密落盘 + 合并进宿主 `PathClassLoader`」——兼容下限降到 Android 6.0，且能用 AOT。代价：**首次启动**（或 app 升级后首启）需一次性解密 + `dex2oat`（大包数秒），之后冷启动复用 oat。明文 dex 持久驻留在 app 私有目录（沙箱级保护）。多进程冷启动用跨进程文件锁串行化解密，避免并发写出损坏的 dex。
 
+---
+
+ApkHarden 现已升级为**工具箱**，左侧导航栏可切换两个工具：
+
+- **基础加固**（原有功能，见上）
+- **隐私合规扫描**（见下）
+
+## 隐私合规扫描
+
+纯静态、只读扫描，不修改任何文件，适合在发版前对本包做自查。扫描维度：
+
+| 维度 | 数据来源 | 说明 |
+|---|---|---|
+| 权限声明 | `AndroidManifest.xml` | 列出所有 `<uses-permission>`，标注敏感级别 |
+| 三方 SDK 识别 | dex 类型表（dexlib2 解析） | 按包名前缀匹配已知 SDK，识别广告/推送/统计等 |
+| 敏感 API 调用点 | dex method refs | 定位调用 `TelephonyManager`、`Location`、剪贴板等高风险 API 的方法 |
+| Manifest 合规项 | `AndroidManifest.xml` | 检查 `targetSdk`、`android:debuggable`、`android:allowBackup` |
+
+**检测规则**位于 `src/main/resources/rules/`（JSON 格式），无需改代码即可增删规则。
+
+**输出**：应用内分组展示扫描结果，可导出 HTML 或 Markdown 报告。
+
+> **定位说明**：本工具输出的是风险*疑点*，供上线前自检参考，**不等于合规结论**。静态扫描无法判断某个敏感 API 调用是否在用户同意前发生（需动态分析）；最终合规判定以监管机构/第三方检测意见为准。
+
 ## 结构
 
 | 部分 | 说明 |
