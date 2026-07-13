@@ -80,3 +80,9 @@ compose.desktop {
         }
     }
 }
+
+// Convenience lifecycle entry; pass CLI arguments to :harden-release-core:releaseCheck.
+tasks.register("releaseCheck") {
+    group = "apkharden"
+    dependsOn(":harden-release-core:releaseCheck")
+}

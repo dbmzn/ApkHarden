@@ -22,3 +22,10 @@ kotlin {
 tasks.test {
     useJUnitPlatform()
 }
+
+val releaseCheck by tasks.registering(JavaExec::class) {
+    group = "apkharden"
+    description = "Statically verify an online APK update candidate."
+    mainClass.set("com.apkharden.release.cli.ReleaseCheckCliKt")
+    classpath = sourceSets.main.get().runtimeClasspath
+}
