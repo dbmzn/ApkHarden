@@ -74,4 +74,48 @@ class ReleaseAnalyzerTest {
         assertEquals(ReleaseStatus.NOT_QUALIFIED, assessment.status)
         assertTrue(assessment.findings.any { it.code == "VERSION_NOT_INCREMENTED" })
     }
-}
+
+    @Test
+    fun `compressed invalid native library is blocked when extraction is disabled`() {
+        val online = TestApkFactory.sign(
+            TestApkFactory.createUnsigned(
+                temp,
+                "com.example.nativeapp",
+                10,
+                extractNativeLibs = false,
+                abis = setOf("arm64-v8a"),
+            ),
+            File(temp, "online-native.apk"),
+        )
+        val candidate = TestApkFactory.sign(
+            TestApkFactory.createUnsigned(
+                temp,
+                "com.example.nativeapp",
+                11,
+                extractNativeLibs = false,
+                abis = setOf("arm64-v8a"),
+            ),
+            File(temp, "candidate-native.apk"),
+        )
+        val metadata = TestApkFactory.metadata(
+            File(temp, "native-metadata.json"),
+            "com.example.nativeapp",
+            11,
+            setOf("arm64-v8a"),
+        )
+
+        val assessment = ReleaseAnalyzer.analyze(
+            ReleaseRequest(
+                online,
+                candidate,
+                metadata,
+                TestApkFactory.keystoreRequest(),
+            )
+        )
+
+        assertEquals(ReleaseStatus.NOT_QUALIFIED, assessment.status)
+        assertTrue(assessment.findings.any { it.code == "ELF_INSPECTION_FAILED" })
+        assertTrue(assessment.findings.any {
+            it.code == "NATIVE_LIB_COMPRESSED_WITHOUT_EXTRACTION"
+        })
+    }}
