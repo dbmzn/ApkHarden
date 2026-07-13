@@ -54,4 +54,17 @@ class ApkIdentityReaderTest {
         assertEquals("config.arm64_v8a", value.splitName)
         assertTrue(value.testOnly)
     }
-}
+
+    @Test
+    fun `combines versionCodeMajor into long versionCode`() {
+        val apk = TestApkFactory.createUnsigned(
+            directory = temp,
+            packageName = "com.example.longversion",
+            versionCode = 120,
+            versionCodeMajor = 1,
+        )
+
+        val value = ApkIdentityReader.read(apk)
+
+        assertEquals((1L shl 32) or 120L, value.versionCode)
+    }}

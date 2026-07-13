@@ -9,6 +9,7 @@ object ApkIdentityReader {
     private const val ATTR_NAME = 0x01010003
     private const val ATTR_REQUIRED = 0x0101028e
     private const val ATTR_TEST_ONLY = 0x01010272
+    private const val ATTR_VERSION_CODE_MAJOR = 0x01010576
     private val nativeEntry = Regex("lib/([^/]+)/[^/]+\\.so")
 
     fun read(apk: File): ApkIdentity {
@@ -38,9 +39,7 @@ object ApkIdentityReader {
                 packageName = requireNotNull(manifest.packageName) {
                     "Manifest package is missing"
                 },
-                versionCode = requireNotNull(manifest.versionCode) {
-                    "Manifest versionCode is missing"
-                }.toLong(),
+                versionCode = longVersionCode(manifest),
                 versionName = manifest.versionName,
                 minSdk = manifest.minSdkVersion ?: 1,
                 targetSdk = manifest.targetSdkVersion ?: 1,
@@ -56,4 +55,16 @@ object ApkIdentityReader {
             )
         }
     }
-}
+
+    private fun longVersionCode(manifest: AndroidManifestBlock): Long {
+        val low = requireNotNull(manifest.versionCode) {
+            "Manifest versionCode is missing"
+        }.toLong() and 0xffffffffL
+        val major = manifest.manifestElement
+            .searchAttributeByResourceId(ATTR_VERSION_CODE_MAJOR)
+            ?.data
+            ?.toLong()
+            ?.and(0xffffffffL)
+            ?: 0L
+        return (major shl 32) or low
+    }}

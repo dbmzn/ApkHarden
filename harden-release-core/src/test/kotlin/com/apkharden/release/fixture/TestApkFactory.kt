@@ -7,6 +7,7 @@ import com.apkharden.release.model.KeystoreRequest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.value.ValueType
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -27,6 +28,7 @@ object TestApkFactory {
         directory: File,
         packageName: String,
         versionCode: Int,
+        versionCodeMajor: Int = 0,
         minSdk: Int = 23,
         targetSdk: Int = 36,
         debuggable: Boolean = false,
@@ -39,6 +41,14 @@ object TestApkFactory {
         val manifest = AndroidManifestBlock().apply {
             this.packageName = packageName
             this.versionCode = versionCode
+            if (versionCodeMajor != 0) {
+                manifestElement
+                    .getOrCreateAndroidAttribute("versionCodeMajor", 0x01010576)
+                    .apply {
+                        valueType = ValueType.DEC
+                        data = versionCodeMajor
+                    }
+            }
             this.minSdkVersion = minSdk
             this.targetSdkVersion = targetSdk
             val app = getOrCreateApplicationElement()

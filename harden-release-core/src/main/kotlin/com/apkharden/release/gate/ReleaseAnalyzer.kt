@@ -23,19 +23,28 @@ object ReleaseAnalyzer {
             keystore.identity,
         ).toMutableList()
 
-        ZipAlignmentInspector.inspect(request.candidateApk)
-            .filterNot { it.aligned16k }
-            .forEach { entry ->
+        val nativeZipEntries = ZipAlignmentInspector.inspect(request.candidateApk)
+        nativeZipEntries.filterNot { it.aligned16k }.forEach { entry ->
+            findings += ReleaseFinding(
+                code = "NATIVE_ZIP_NOT_16K_ALIGNED",
+                level = FindingLevel.BLOCKER,
+                message = "Uncompressed native library is not 16KB aligned",
+                details = mapOf(
+                    "entry" to entry.name,
+                    "offset" to entry.dataOffset.toString(),
+                ),
+            )
+        }
+        if (candidate.extractNativeLibs == false) {
+            nativeZipEntries.filter { it.compressionMethod != 0 }.forEach { entry ->
                 findings += ReleaseFinding(
-                    code = "NATIVE_ZIP_NOT_16K_ALIGNED",
+                    code = "NATIVE_LIB_COMPRESSED_WITHOUT_EXTRACTION",
                     level = FindingLevel.BLOCKER,
-                    message = "Uncompressed native library is not 16KB aligned",
-                    details = mapOf(
-                        "entry" to entry.name,
-                        "offset" to entry.dataOffset.toString(),
-                    ),
+                    message = "Native library is compressed while extractNativeLibs is false",
+                    details = mapOf("entry" to entry.name),
                 )
             }
+        }
 
         if (candidate.abis.isNotEmpty()) {
             try {
