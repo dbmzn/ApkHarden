@@ -2,7 +2,10 @@ package com.apkharden.release.fixture
 
 import com.android.apksig.ApkSigner
 import com.apkharden.release.crypto.KeystoreReader
+import com.apkharden.release.metadata.HardenMetadata
 import com.apkharden.release.model.KeystoreRequest
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import java.io.File
 import java.util.zip.ZipEntry
@@ -73,6 +76,33 @@ object TestApkFactory {
         }
     }
 
+    fun metadata(
+        output: File,
+        applicationId: String,
+        versionCode: Long,
+        abis: Set<String>,
+    ): File {
+        val certificate = KeystoreReader.load(keystoreRequest())
+            .identity
+            .certificateSha256
+        val value = HardenMetadata(
+            schemaVersion = 1,
+            pluginVersion = "1.0.0",
+            runtimeVersion = "1.0.0",
+            variantName = "fixture",
+            applicationId = applicationId,
+            versionCode = versionCode,
+            minSdk = 23,
+            targetSdk = 36,
+            debuggable = false,
+            r8Enabled = false,
+            abis = abis,
+            expectedCertificateSha256 = certificate,
+            buildId = "fixture-build",
+        )
+        output.writeText(Json.encodeToString(value))
+        return output
+    }
     fun sign(input: File, output: File): File {
         val loaded = KeystoreReader.load(keystoreRequest())
         val config = ApkSigner.SignerConfig.Builder(
