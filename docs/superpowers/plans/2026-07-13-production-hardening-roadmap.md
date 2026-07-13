@@ -10,7 +10,7 @@
 
 ---
 
-## Phase 1: Release Core Foundation
+## Phase 1: Release Core Foundation — COMPLETED (2026-07-13)
 
 Detailed plan: `docs/superpowers/plans/2026-07-13-release-core-foundation.md`
 
