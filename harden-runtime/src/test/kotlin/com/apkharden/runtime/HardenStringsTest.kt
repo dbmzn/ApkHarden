@@ -44,6 +44,37 @@ class HardenStringsTest {
     }
 
     @Test
+    fun `decode rejects tampered ciphertext iv and table order`() {
+        val first = encrypted(0, "first")
+        val second = encrypted(1, "second")
+        val tamperedTables = listOf(
+            table(
+                first.copy(
+                    ciphertext = first.ciphertext.copyOf().also { value ->
+                        value[0] = (value[0].toInt() xor 1).toByte()
+                    },
+                ),
+            ),
+            table(
+                first.copy(
+                    iv = first.iv.copyOf().also { value ->
+                        value[0] = (value[0].toInt() xor 1).toByte()
+                    },
+                ),
+            ),
+            table(second, first),
+        )
+
+        tamperedTables.forEach { tampered ->
+            HardenStrings.install(CONFIG, tampered)
+            assertThrows(AEADBadTagException::class.java) {
+                HardenStrings.decode(0)
+            }
+            HardenStrings.clear()
+        }
+    }
+
+    @Test
     fun `install is idempotent for one table and rejects another table`() {
         val table = table(encrypted(0, "value"))
 

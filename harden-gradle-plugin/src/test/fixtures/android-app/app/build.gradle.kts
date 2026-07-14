@@ -1,5 +1,8 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.apkharden.production")
 }
 
@@ -11,6 +14,11 @@ val smokeKeyPassword = providers.gradleProperty("apkharden.keyPassword").orNull
 android {
     namespace = "com.example.fixture"
     compileSdk = 34
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
     signingConfigs {
         if (listOf(smokeStoreFile, smokeStorePassword, smokeKeyAlias, smokeKeyPassword).all { it != null }) {
@@ -63,6 +71,14 @@ android {
             )
         }
     }
+}
+
+dependencies {
+    implementation("androidx.compose.runtime:runtime:1.7.6")
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }
 
 apkHarden {

@@ -19,10 +19,11 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.CleanupMode
 import org.junit.jupiter.api.io.TempDir
 
 class ProductionPluginFunctionalTest {
-    @TempDir
+    @TempDir(cleanup = CleanupMode.ON_SUCCESS)
     lateinit var projectDir: File
 
     @BeforeEach
@@ -225,6 +226,9 @@ class ProductionPluginFunctionalTest {
             val apk = apks.single { file ->
                 "-${variant.flavor}-${variant.buildType}" in file.name
             }
+            assertTrue(apk.length() <= MAX_FIXTURE_APK_BYTES) {
+                "Fixture APK exceeds size budget: ${apk.length()} bytes in $apk"
+            }
             assertEquals(variant.abis, apkAbis(apk))
             assertFalse(apkDexContains(apk, PROTECTED_FIXTURE_STRING)) {
                 "Protected fixture plaintext remains in $apk"
@@ -234,10 +238,12 @@ class ProductionPluginFunctionalTest {
                     "Protected fixture plaintext remains in $apk: $plaintext"
                 }
             }
-            EXCLUDED_STRING_FIXTURES.forEach { plaintext ->
-                assertTrue(apkDexContains(apk, plaintext)) {
-                    "Excluded framework or API contract is missing from $apk: $plaintext"
-                }
+            val missingExcludedStrings = EXCLUDED_STRING_FIXTURES.filterNot { plaintext ->
+                apkDexContains(apk, plaintext)
+            }
+            assertTrue(missingExcludedStrings.isEmpty()) {
+                "Excluded framework or API contracts are missing from $apk: " +
+                    missingExcludedStrings.joinToString()
             }
             assertTrue(GENERATED_STRING_TABLE in apkClassTypes(apk)) {
                 "Generated string table is missing from $apk"
@@ -366,6 +372,7 @@ class ProductionPluginFunctionalTest {
         val VARIANT_NAME = Regex("VARIANT_NAME = \"([^\"]+)\"")
         val DEX_ENTRY = Regex("classes(?:\\d+)?\\.dex")
         val CLASS_MAPPING = Regex("^[^#\\s].+ -> .+:$")
+        const val MAX_FIXTURE_APK_BYTES = 5L * 1024L * 1024L
         const val BUSINESS_APPLICATION = "Lcom/example/fixture/BusinessApplication;"
         const val GENERATED_STRING_TABLE =
             "Lcom/apkharden/generated/HardenStringTableConfig;"
@@ -374,12 +381,20 @@ class ProductionPluginFunctionalTest {
         val PROTECTED_STRING_FIXTURES = setOf(
             "fixture-private-secret",
             "fixture-business-secret",
+            "fixture-kotlin-secret",
+            "fixture-coroutine-secret",
+            "fixture-compose-secret",
+            "fixture-jni-business-secret",
         )
         val EXCLUDED_STRING_FIXTURES = setOf(
             "fixture-public-contract",
             "fixture-explicit-contract",
             "com.example.fixture.ReflectionTarget",
             "fixture-reflection-companion",
+            "fixture-room-database",
+            "fixture_serial_name",
+            "fixture-retrofit-path",
+            "fixture-native-contract",
         )
         val REPORT_FORBIDDEN_PLAINTEXT =
             PROTECTED_STRING_FIXTURES + EXCLUDED_STRING_FIXTURES + PROTECTED_FIXTURE_STRING

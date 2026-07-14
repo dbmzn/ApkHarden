@@ -1,3 +1,13 @@
 # Fixture business rules remain owned by the application.
+-keepattributes *Annotation*,Signature,Exceptions
+-keep @interface retrofit2.http.** { *; }
 -keep class com.example.fixture.BusinessApplication { *; }
 -keep class com.example.fixture.StringFixture { *; }
+-keep class com.example.fixture.KotlinStringFixtures { *; }
+-keep class com.example.fixture.RoomMessage { *; }
+-keep interface com.example.fixture.RoomMessageDao { *; }
+-keep class com.example.fixture.FixtureDatabase { *; }
+-keep class com.example.fixture.RoomStringFixture { *; }
+-keep class com.example.fixture.SerializedMessage { *; }
+-keep interface com.example.fixture.FixtureApi { *; }
+-keep class com.example.fixture.JniStringFixture { *; }

@@ -60,7 +60,7 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
   `HardenStrings.decode(int)`.
 - [x] Exclude runtime/generated classes, R/BuildConfig/DataBinding, Application
   constructors/static initializers, AppComponentFactory, and configured rules.
-- [ ] Preserve frames and verify transformed bytecode with ASM.
+- [x] Preserve frames and verify transformed bytecode with ASM and D8/R8 fixtures.
 
 ## Task 5: Transform safe constant fields
 
@@ -78,12 +78,12 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 
 ## Task 7: Certify fixtures and plaintext removal
 
-- [ ] Cover Java, Kotlin, coroutine, Compose, reflection, serialization, Room,
+- [x] Cover Java, Kotlin, coroutine, Compose, reflection, serialization, Room,
   Retrofit, JNI, custom/default Application, and R8 on/off fixtures.
-- [ ] Assert protected plaintext is absent from class and DEX scans.
-- [ ] Assert excluded framework strings remain unchanged.
-- [ ] Verify ciphertext tampering fails authentication.
-- [ ] Measure startup, decode, size, and cache memory thresholds.
+- [x] Assert protected plaintext is absent from class and DEX scans.
+- [x] Assert excluded framework strings remain unchanged.
+- [x] Verify ciphertext, IV, and table-order tampering fails authentication.
+- [x] Measure startup, decode, APK size, and cache memory thresholds.
 
 Phase 3 may be implemented while deferred device certification is pending, but
 it must not be marked release-qualified until the mandatory device matrix also

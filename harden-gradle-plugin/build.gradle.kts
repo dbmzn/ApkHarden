@@ -17,6 +17,9 @@ val functionalTestPluginClasspath by configurations.creating {
 dependencies {
     compileOnly("com.android.tools.build:gradle:8.5.1")
     functionalTestPluginClasspath("com.android.tools.build:gradle:8.5.1")
+    functionalTestPluginClasspath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
+    functionalTestPluginClasspath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.0")
+    functionalTestPluginClasspath("org.jetbrains.kotlin:kotlin-serialization:2.1.0")
     implementation(project(":harden-release-core"))
     implementation(project(":harden-string-crypto"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
