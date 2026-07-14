@@ -23,6 +23,7 @@ class ApkHardenPlugin : Plugin<Project> {
         }
         project.pluginManager.withPlugin(ANDROID_APPLICATION_PLUGIN) {
             applicationPluginApplied = true
+            configureRuntimeSupport(project, extension)
             val androidComponents = project.extensions.getByType(
                 ApplicationAndroidComponentsExtension::class.java,
             )
@@ -47,6 +48,23 @@ class ApkHardenPlugin : Plugin<Project> {
     private companion object {
         const val ANDROID_APPLICATION_PLUGIN = "com.android.application"
         const val ANDROID_LIBRARY_PLUGIN = "com.android.library"
+    }
+}
+
+internal fun configureRuntimeSupport(
+    project: Project,
+    extension: ApkHardenExtension,
+) {
+    when (extension.r8Policy.get()) {
+        R8Policy.AUTO, R8Policy.IGNORE -> Unit
+    }
+    val implementation = project.configurations.getByName("implementation")
+    val alreadyAdded = implementation.dependencies.any { dependency ->
+        dependency.group == PluginBuildInfo.RUNTIME_GROUP &&
+            dependency.name == PluginBuildInfo.RUNTIME_ARTIFACT
+    }
+    if (!alreadyAdded) {
+        project.dependencies.add("implementation", PluginBuildInfo.RUNTIME_COORDINATE)
     }
 }
 
