@@ -7,6 +7,7 @@ import kotlin.system.exitProcess
 object HardenRuntime {
     private val installer = RuntimeInstaller()
 
+    @JvmStatic
     fun install(application: Application, config: HardenConfig) {
         installer.install(application, config)
     }

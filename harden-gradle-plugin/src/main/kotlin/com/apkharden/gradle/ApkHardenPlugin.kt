@@ -2,6 +2,7 @@ package com.apkharden.gradle
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.ApplicationVariant
+import com.apkharden.gradle.instrumentation.registerApplicationInstrumentation
 import com.apkharden.gradle.task.registerVariantGenerationTasks
 import org.gradle.api.Action
 import org.gradle.api.GradleException
@@ -26,6 +27,7 @@ class ApkHardenPlugin : Plugin<Project> {
             )
             registerApplicationVariants(androidComponents, extension) { variant, descriptor ->
                 registerVariantGenerationTasks(project, extension, variant, descriptor)
+                registerApplicationInstrumentation(variant)
             }
         }
         project.afterEvaluate {
