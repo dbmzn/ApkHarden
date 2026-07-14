@@ -8,19 +8,22 @@ import org.objectweb.asm.tree.MethodInsnNode
 class StringLdcTransformer(
     private val stringIds: Map<String, Int>,
 ) {
+    fun collect(
+        classNode: ClassNode,
+        applicationClassName: String? = null,
+    ): List<String> = eligibleMethods(classNode, applicationClassName)
+        .flatMap { method ->
+            method.instructions.toArray().mapNotNull { instruction ->
+                ((instruction as? LdcInsnNode)?.cst as? String)?.takeIf(String::isNotEmpty)
+            }
+        }
+
     fun transform(
         classNode: ClassNode,
         applicationClassName: String? = null,
     ): Int {
-        val applicationInternalName = applicationClassName?.replace('.', '/')
         var transformed = 0
-        classNode.methods.forEach { method ->
-            if (
-                classNode.name == applicationInternalName &&
-                method.name in APPLICATION_INITIALIZERS
-            ) {
-                return@forEach
-            }
+        eligibleMethods(classNode, applicationClassName).forEach { method ->
             method.instructions.toArray().forEach { instruction ->
                 val plaintext = (instruction as? LdcInsnNode)?.cst as? String
                     ?: return@forEach
@@ -40,6 +43,14 @@ class StringLdcTransformer(
             }
         }
         return transformed
+    }
+
+    private fun eligibleMethods(
+        classNode: ClassNode,
+        applicationClassName: String?,
+    ) = classNode.methods.filterNot { method ->
+        classNode.name == applicationClassName?.replace('.', '/') &&
+            method.name in APPLICATION_INITIALIZERS
     }
 
     private companion object {

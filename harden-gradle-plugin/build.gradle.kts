@@ -33,11 +33,19 @@ dependencies {
 kotlin { jvmToolchain(17) }
 tasks.test {
     useJUnitPlatform()
-    dependsOn(":harden-runtime:bundleReleaseAar")
+    dependsOn(":harden-runtime:bundleReleaseAar", ":harden-string-crypto:jar")
     systemProperty(
         "apkharden.runtime.aar",
         project(":harden-runtime").layout.buildDirectory
             .file("outputs/aar/harden-runtime-release.aar")
+            .get()
+            .asFile
+            .absolutePath,
+    )
+    systemProperty(
+        "apkharden.string.crypto.jar",
+        project(":harden-string-crypto").tasks.named("jar")
+            .flatMap { task -> (task as org.gradle.jvm.tasks.Jar).archiveFile }
             .get()
             .asFile
             .absolutePath,

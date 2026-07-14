@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Opcodes
+import org.objectweb.asm.tree.ClassNode
 
 class StringTableCompilerTest {
     @Test
@@ -75,6 +78,23 @@ class StringTableCompilerTest {
         assertEquals(emptyMap<String, Int>(), table.ids)
         assertEquals(0, table.entries.size)
         assertFalse(table.javaSource().contains("null"))
+    }
+
+    @Test
+    fun `generated table bytecode exposes the runtime table singleton`() {
+        val table = compiler().compile(
+            strings = listOf("secret"),
+            certificateSha256 = CERTIFICATE,
+            applicationId = "com.example.app",
+            buildId = "build-1",
+        )
+        val node = ClassNode(Opcodes.ASM9)
+
+        ClassReader(table.classBytes()).accept(node, 0)
+
+        assertEquals("com/apkharden/generated/HardenStringTableConfig", node.name)
+        assertEquals("com/apkharden/runtime/HardenStringTable", node.fields.single().desc.removeSurrounding("L", ";"))
+        assertFalse(table.classBytes().toString(Charsets.ISO_8859_1).contains("secret"))
     }
 
     @Test

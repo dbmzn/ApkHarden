@@ -4,6 +4,7 @@ import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.ApplicationVariant
 import com.apkharden.gradle.instrumentation.registerApplicationInstrumentation
+import com.apkharden.gradle.strings.registerStringProtectionTransform
 import com.apkharden.gradle.task.registerDefaultApplicationManifestTransform
 import com.apkharden.gradle.task.registerVariantGenerationTasks
 import org.gradle.api.Action
@@ -30,9 +31,10 @@ class ApkHardenPlugin : Plugin<Project> {
             )
             val android = project.extensions.getByType(ApplicationExtension::class.java)
             registerApplicationVariants(androidComponents, extension, android) { variant, descriptor ->
-                registerVariantGenerationTasks(project, extension, variant, descriptor)
+                val buildId = registerVariantGenerationTasks(project, extension, variant, descriptor)
                 registerDefaultApplicationManifestTransform(project, variant)
                 registerApplicationInstrumentation(variant)
+                registerStringProtectionTransform(project, extension, variant, descriptor, buildId)
             }
         }
         project.afterEvaluate {

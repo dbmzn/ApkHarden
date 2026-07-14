@@ -46,17 +46,17 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 - Modify: plugin extension and variant generation tasks.
 - Create: string collection/table generation tasks and tests.
 
-- [ ] Default protected package prefixes to applicationId when none are set.
-- [ ] Generate secure random key fragments and one independent IV per entry.
-- [ ] Bind entry ids as AES-GCM AAD and generate a standard Java table class.
-- [ ] Keep plaintext, keys, passwords, and private material out of metadata and
+- [x] Default protected package prefixes to applicationId when none are set.
+- [x] Generate secure random key fragments and one independent IV per entry.
+- [x] Bind entry ids as AES-GCM AAD and generate a standard table class.
+- [x] Keep plaintext, keys, passwords, and private material out of metadata and
   Gradle logs.
-- [ ] Make task inputs/outputs explicit and cache behavior correct for randomness.
+- [x] Make task inputs/outputs explicit and cache behavior correct for randomness.
 
 ## Task 4: Transform eligible method-body strings
 
-- [ ] Instrument project classes only.
-- [ ] Replace eligible `LDC String` instructions with integer id plus
+- [x] Instrument project classes only.
+- [x] Replace eligible `LDC String` instructions with integer id plus
   `HardenStrings.decode(int)`.
 - [ ] Exclude runtime/generated classes, R/BuildConfig/DataBinding, Application
   constructors/static initializers, AppComponentFactory, and configured rules.

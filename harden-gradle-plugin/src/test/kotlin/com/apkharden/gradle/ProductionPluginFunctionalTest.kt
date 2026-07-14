@@ -11,6 +11,7 @@ import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,6 +26,28 @@ class ProductionPluginFunctionalTest {
         val fixture = File("src/test/fixtures/android-app")
         fixture.copyRecursively(projectDir, overwrite = true)
         val runtimeAar = File(requireNotNull(System.getProperty("apkharden.runtime.aar")))
+        val stringCryptoJar = File(
+            requireNotNull(System.getProperty("apkharden.string.crypto.jar")),
+        )
+        val stringCryptoModule = File(
+            projectDir,
+            "repo/com/apkharden/harden-string-crypto/0.1.0",
+        ).apply { mkdirs() }
+        stringCryptoJar.copyTo(
+            File(stringCryptoModule, "harden-string-crypto-0.1.0.jar"),
+            overwrite = true,
+        )
+        File(stringCryptoModule, "harden-string-crypto-0.1.0.pom").writeText(
+            """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.apkharden</groupId>
+              <artifactId>harden-string-crypto</artifactId>
+              <version>0.1.0</version>
+              <packaging>jar</packaging>
+            </project>
+            """.trimIndent(),
+        )
         val runtimeModule = File(
             projectDir,
             "repo/com/apkharden/harden-runtime/0.1.0",
@@ -39,6 +62,12 @@ class ProductionPluginFunctionalTest {
               <version>0.1.0</version>
               <packaging>aar</packaging>
               <dependencies>
+                <dependency>
+                  <groupId>com.apkharden</groupId>
+                  <artifactId>harden-string-crypto</artifactId>
+                  <version>0.1.0</version>
+                  <scope>runtime</scope>
+                </dependency>
                 <dependency>
                   <groupId>org.jetbrains.kotlin</groupId>
                   <artifactId>kotlin-stdlib</artifactId>
@@ -170,6 +199,12 @@ class ProductionPluginFunctionalTest {
                 "-${variant.flavor}-${variant.buildType}" in file.name
             }
             assertEquals(variant.abis, apkAbis(apk))
+            assertFalse(apkDexContains(apk, PROTECTED_FIXTURE_STRING)) {
+                "Protected fixture plaintext remains in $apk"
+            }
+            assertTrue(GENERATED_STRING_TABLE in apkClassTypes(apk)) {
+                "Generated string table is missing from $apk"
+            }
             val applicationReferences = applicationMethodReferences(apk)
             val installTarget = runtimeInstallTarget(variant)
             assertTrue(applicationReferences.any { reference ->
@@ -188,6 +223,31 @@ class ProductionPluginFunctionalTest {
             .map { it.name }
             .filter { it.startsWith("lib/") && it.endsWith(".so") }
             .map { it.substringAfter("lib/").substringBefore('/') }
+            .toSet()
+    }
+
+    private fun apkDexContains(apk: File, value: String): Boolean = ZipFile(apk).use { zip ->
+        zip.entries().asSequence()
+            .filter { it.name.matches(DEX_ENTRY) }
+            .any { entry ->
+                zip.getInputStream(entry).use { input ->
+                    input.readBytes().toString(Charsets.ISO_8859_1).contains(value)
+                }
+            }
+    }
+
+    private fun apkClassTypes(apk: File): Set<String> = ZipFile(apk).use { zip ->
+        zip.entries().asSequence()
+            .filter { it.name.matches(DEX_ENTRY) }
+            .flatMap { entry ->
+                val dex = zip.getInputStream(entry).use { input ->
+                    DexBackedDexFile.fromInputStream(
+                        Opcodes.getDefault(),
+                        BufferedInputStream(input),
+                    )
+                }
+                dex.classes.asSequence().map { it.type }
+            }
             .toSet()
     }
 
@@ -270,7 +330,10 @@ class ProductionPluginFunctionalTest {
         val DEX_ENTRY = Regex("classes(?:\\d+)?\\.dex")
         val CLASS_MAPPING = Regex("^[^#\\s].+ -> .+:$")
         const val BUSINESS_APPLICATION = "Lcom/example/fixture/BusinessApplication;"
+        const val GENERATED_STRING_TABLE =
+            "Lcom/apkharden/generated/HardenStringTableConfig;"
         const val HARDEN_RUNTIME = "Lcom/apkharden/runtime/HardenRuntime;"
+        const val PROTECTED_FIXTURE_STRING = "ApkHarden smoke fixture"
         const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
     }
 }

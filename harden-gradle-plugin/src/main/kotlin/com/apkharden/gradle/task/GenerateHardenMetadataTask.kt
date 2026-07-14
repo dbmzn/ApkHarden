@@ -13,6 +13,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
@@ -139,7 +140,7 @@ internal fun registerVariantGenerationTasks(
     extension: ApkHardenExtension,
     variant: ApplicationVariant,
     descriptor: VariantDescriptor,
-) {
+): Provider<String> {
     val output = variant.outputs.singleOrNull() ?: throw GradleException(
         "ApkHarden requires exactly one APK output for variant ${descriptor.name}.",
     )
@@ -184,6 +185,7 @@ internal fun registerVariantGenerationTasks(
         GenerateHardenConfigTask::outputDirectory,
     )
     variant.lifecycleTasks.registerPreBuild(metadataTask)
+    return buildIdProvider
 }
 
 private fun HardenVariantGenerationTask.configureInputs(
