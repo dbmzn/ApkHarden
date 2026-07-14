@@ -8,4 +8,9 @@ pluginManagement {
 
 rootProject.name = "ApkHarden"
 include(":harden-release-core")
-include(":harden-runtime", ":harden-gradle-plugin", ":harden-device-tests")
+include(
+    ":harden-runtime",
+    ":harden-gradle-plugin",
+    ":harden-device-tests",
+    ":harden-string-crypto",
+)
