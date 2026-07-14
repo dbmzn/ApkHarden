@@ -58,7 +58,7 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 - [x] Instrument project classes only.
 - [x] Replace eligible `LDC String` instructions with integer id plus
   `HardenStrings.decode(int)`.
-- [ ] Exclude runtime/generated classes, R/BuildConfig/DataBinding, Application
+- [x] Exclude runtime/generated classes, R/BuildConfig/DataBinding, Application
   constructors/static initializers, AppComponentFactory, and configured rules.
 - [ ] Preserve frames and verify transformed bytecode with ASM.
 
@@ -71,10 +71,10 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 
 ## Task 6: Add framework-aware exclusions and reports
 
-- [ ] Exclude annotation values and known Retrofit, Room, serialization, JNI,
+- [x] Exclude annotation values and known Retrofit, Room, serialization, JNI,
   reflection, ServiceLoader, and resource-name contracts.
 - [ ] Produce per-variant protected/excluded counts and stable reason codes.
-- [ ] Support explicit class and string allowlists.
+- [x] Support explicit class and string allowlists.
 
 ## Task 7: Certify fixtures and plaintext removal
 

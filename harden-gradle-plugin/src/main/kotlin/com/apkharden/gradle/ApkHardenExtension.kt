@@ -17,5 +17,9 @@ open class ApkHardenExtension @Inject constructor(objects: ObjectFactory) {
     val r8Policy: Property<R8Policy> = objects.property(R8Policy::class.java).convention(R8Policy.AUTO)
     val protectedPackages: SetProperty<String> =
         objects.setProperty(String::class.java).convention(emptySet())
+    val excludedClasses: SetProperty<String> =
+        objects.setProperty(String::class.java).convention(emptySet())
+    val excludedStrings: SetProperty<String> =
+        objects.setProperty(String::class.java).convention(emptySet())
     val certificateSha256: Property<String> = objects.property(String::class.java)
 }

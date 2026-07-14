@@ -56,6 +56,12 @@ abstract class TransformHardenStringsTask : DefaultTask() {
     @get:Input
     abstract val protectedPackages: SetProperty<String>
 
+    @get:Input
+    abstract val excludedClasses: SetProperty<String>
+
+    @get:Input
+    abstract val excludedStrings: SetProperty<String>
+
     @TaskAction
     fun transform() {
         val entries = readInputs()
@@ -65,17 +71,18 @@ abstract class TransformHardenStringsTask : DefaultTask() {
         val selection = StringProtectionSelection(
             protectedPackages.get(),
             applicationId.get(),
+            excludedClasses.get(),
         )
         val applicationClass = applicationClassName.orNull?.ifBlank { null }
         val nodes = linkedMapOf<String, ClassNode>()
-        val collector = StringLdcTransformer(emptyMap())
+        val collector = StringLdcTransformer(emptyMap(), excludedStrings.get())
         val strings = buildList {
             entries.forEach { (name, bytes) ->
                 if (!name.endsWith(CLASS_SUFFIX)) return@forEach
                 val className = name.removeSuffix(CLASS_SUFFIX)
-                if (!selection.includes(className)) return@forEach
                 val node = ClassNode(Opcodes.ASM9)
                 ClassReader(bytes).accept(node, 0)
+                if (!selection.includes(node)) return@forEach
                 nodes[name] = node
                 addAll(collector.collect(node, applicationClass))
             }
@@ -86,7 +93,7 @@ abstract class TransformHardenStringsTask : DefaultTask() {
             applicationId = applicationId.get(),
             buildId = buildId.get(),
         )
-        val transformer = StringLdcTransformer(table.ids)
+        val transformer = StringLdcTransformer(table.ids, excludedStrings.get())
         nodes.forEach { (name, node) ->
             transformer.transform(node, applicationClass)
             entries[name] = ClassWriter(0).also(node::accept).toByteArray()
@@ -159,6 +166,8 @@ internal fun registerStringProtectionTransform(
         transform.applicationId.set(descriptor.applicationId)
         transform.buildId.set(buildId)
         transform.protectedPackages.set(extension.protectedPackages)
+        transform.excludedClasses.set(extension.excludedClasses)
+        transform.excludedStrings.set(extension.excludedStrings)
         transform.applicationClassName.set(
             variant.artifacts.get(SingleArtifact.MERGED_MANIFEST).map { manifest ->
                 ManifestApplicationResolver.resolve(manifest.asFile).orEmpty()

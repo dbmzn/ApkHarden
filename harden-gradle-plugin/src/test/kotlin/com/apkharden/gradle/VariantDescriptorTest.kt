@@ -27,6 +27,8 @@ class VariantDescriptorTest {
         assertEquals(emptySet<String>(), extension.excludedVariants.get())
         assertEquals(R8Policy.AUTO, extension.r8Policy.get())
         assertEquals(emptySet<String>(), extension.protectedPackages.get())
+        assertEquals(emptySet<String>(), extension.excludedClasses.get())
+        assertEquals(emptySet<String>(), extension.excludedStrings.get())
         assertFalse(extension.certificateSha256.isPresent)
     }
 

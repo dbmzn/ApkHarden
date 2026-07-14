@@ -96,6 +96,52 @@ class StringLdcTransformerTest {
     }
 
     @Test
+    fun `known reflection and loading call sites exclude every method string`() {
+        val node = fixtureClass("com/example/Business")
+        node.methods.add(MethodNode(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "reflect", "()V", null, null).apply {
+            instructions.add(LdcInsnNode("com.example.Target"))
+            instructions.add(
+                MethodInsnNode(
+                    Opcodes.INVOKESTATIC,
+                    "java/lang/Class",
+                    "forName",
+                    "(Ljava/lang/String;)Ljava/lang/Class;",
+                    false,
+                ),
+            )
+            instructions.add(InsnNode(Opcodes.POP))
+            instructions.add(LdcInsnNode("other-value"))
+            instructions.add(InsnNode(Opcodes.POP))
+            instructions.add(InsnNode(Opcodes.RETURN))
+        })
+
+        val transformer = StringLdcTransformer(
+            mapOf("com.example.Target" to 0, "other-value" to 1),
+        )
+
+        assertEquals(emptyList<String>(), transformer.collect(node))
+        assertEquals(0, transformer.transform(node))
+    }
+
+    @Test
+    fun `explicit excluded strings remain plaintext while other strings transform`() {
+        val node = fixtureClass("com/example/Business")
+        node.methods.add(stringMethod("excluded", "public-api-name"))
+        node.methods.add(stringMethod("protected", "secret"))
+
+        val transformed = StringLdcTransformer(
+            mapOf("public-api-name" to 0, "secret" to 1),
+            excludedStrings = setOf("public-api-name"),
+        ).transform(node)
+
+        assertEquals(1, transformed)
+        assertTrue(
+            node.methods.single { it.name == "excluded" }.instructions.toArray()
+                .any { it is LdcInsnNode && it.cst == "public-api-name" },
+        )
+    }
+
+    @Test
     fun `transformed class passes asm verification`() {
         val node = fixtureClass("com/example/Business")
         node.methods.add(stringMethod("value", "secret"))
@@ -134,6 +180,23 @@ class StringLdcTransformerTest {
 
         assertTrue(selection.includes("com/shared/feature/Screen"))
         assertFalse(selection.includes("com/example/app/Screen"))
+    }
+
+    @Test
+    fun `class selection honors user wildcards and framework annotations`() {
+        val selection = StringProtectionSelection(
+            protectedPackages = emptySet(),
+            applicationId = "com.example.app",
+            excludedClasses = setOf("com.example.app.generated.*", "com.example.app.Exact"),
+        )
+        val serializable = fixtureClass("com/example/app/Model").apply {
+            visitAnnotation("Lkotlinx/serialization/Serializable;", true).visitEnd()
+        }
+
+        assertFalse(selection.includes("com/example/app/generated/Adapter"))
+        assertFalse(selection.includes("com/example/app/Exact"))
+        assertTrue(selection.includes("com/example/app/ExactChild"))
+        assertFalse(selection.includes(serializable))
     }
 
     private fun fixtureClass(name: String): ClassNode = ClassNode(Opcodes.ASM9).apply {
