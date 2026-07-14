@@ -18,6 +18,7 @@ dependencies {
     compileOnly("com.android.tools.build:gradle:8.5.1")
     functionalTestPluginClasspath("com.android.tools.build:gradle:8.5.1")
     implementation(project(":harden-release-core"))
+    implementation(project(":harden-string-crypto"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.ow2.asm:asm:9.6")
     implementation("org.ow2.asm:asm-tree:9.6")
