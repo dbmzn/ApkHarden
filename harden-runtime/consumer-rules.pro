@@ -8,3 +8,8 @@
 -keep class com.apkharden.generated.HardenVariantConfig {
     public static final com.apkharden.runtime.HardenConfig INSTANCE;
 }
+
+# Runtime installation loads the optional generated string table by exact name.
+-keep class com.apkharden.generated.HardenStringTableConfig {
+    public static final com.apkharden.runtime.HardenStringTable INSTANCE;
+}

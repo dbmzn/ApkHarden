@@ -10,6 +10,7 @@ enum class HardenFailure {
     DEBUGGER_CONNECTED,
     TRACER_DETECTED,
     CERTIFICATE_MISMATCH,
+    STRING_TABLE_INVALID,
 }
 
 internal class FailureRecorder {

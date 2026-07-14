@@ -30,3 +30,22 @@ internal object GeneratedConfigLoader {
 
     private const val GENERATED_CONFIG_CLASS = "com.apkharden.generated.HardenVariantConfig"
 }
+
+internal object GeneratedStringTableLoader {
+    fun loadOrNull(
+        className: String = GENERATED_STRING_TABLE_CLASS,
+        classLoader: ClassLoader,
+    ): HardenStringTable? {
+        val tableClass = try {
+            Class.forName(className, true, classLoader)
+        } catch (_: ClassNotFoundException) {
+            return null
+        }
+        val instance = tableClass.getField("INSTANCE").get(null)
+        return instance as? HardenStringTable
+            ?: error("$className.INSTANCE is not a HardenStringTable")
+    }
+
+    private const val GENERATED_STRING_TABLE_CLASS =
+        "com.apkharden.generated.HardenStringTableConfig"
+}

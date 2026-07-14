@@ -35,6 +35,7 @@ android {
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    implementation(project(":harden-string-crypto"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     androidTestImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation("androidx.test.ext:junit-ktx:1.2.1")

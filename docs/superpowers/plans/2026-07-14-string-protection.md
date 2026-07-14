@@ -18,13 +18,13 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 - Create: `harden-string-crypto/src/main/kotlin/com/apkharden/crypto/StringCrypto.kt`
 - Create: `harden-string-crypto/src/test/kotlin/com/apkharden/crypto/StringCryptoTest.kt`
 
-- [ ] Derive a 256-bit key from two build fragments, current certificate
+- [x] Derive a 256-bit key from two build fragments, current certificate
   SHA-256, applicationId, and buildId using a versioned, length-delimited input.
-- [ ] Encrypt/decrypt UTF-8 strings with AES-256-GCM, 12-byte IVs, 128-bit tags,
+- [x] Encrypt/decrypt UTF-8 strings with AES-256-GCM, 12-byte IVs, 128-bit tags,
   and caller-provided AAD.
-- [ ] Reject malformed keys, IVs, certificate hashes, and tampered inputs.
-- [ ] Keep the module free of Android and Gradle dependencies.
-- [ ] Commit `feat(crypto): add certificate-bound string encryption`.
+- [x] Reject malformed keys, IVs, certificate hashes, and tampered inputs.
+- [x] Keep the module free of Android and Gradle dependencies.
+- [x] Commit `feat(crypto): add certificate-bound string encryption`.
 
 ## Task 2: Add lazy runtime string decoding
 
@@ -34,11 +34,11 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 - Create: `harden-runtime/src/main/kotlin/com/apkharden/runtime/HardenStrings.kt`
 - Create: `harden-runtime/src/test/kotlin/com/apkharden/runtime/HardenStringsTest.kt`
 
-- [ ] Initialize only after runtime signer verification succeeds.
-- [ ] Require exactly one generated table and validate all table dimensions.
-- [ ] Decode by integer id and cache plaintext in `AtomicReferenceArray`.
-- [ ] Never persist plaintext or eagerly decrypt the complete table.
-- [ ] Clear key material on initialization failure and process termination.
+- [x] Initialize only after runtime signer verification succeeds.
+- [x] Require exactly one generated table and validate all table dimensions.
+- [x] Decode by integer id and cache plaintext in `AtomicReferenceArray`.
+- [x] Never persist plaintext or eagerly decrypt the complete table.
+- [x] Clear key material on initialization failure and process termination.
 
 ## Task 3: Generate per-variant encrypted string tables
 

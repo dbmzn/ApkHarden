@@ -2,6 +2,7 @@ package com.apkharden.runtime
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.apkharden.crypto.StringCrypto
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONObject
@@ -26,8 +27,25 @@ class HardenRuntimeTest {
 
     @Test
     fun validReleaseLikeContextInitializesOnce() {
+        HardenStrings.clear()
         val antiDebugChecks = AtomicInteger()
         val certificateChecks = AtomicInteger()
+        val fragmentA = ByteArray(16) { 1 }
+        val fragmentB = ByteArray(16) { 2 }
+        val iv = ByteArray(12) { it.toByte() }
+        val key = StringCrypto.deriveKey(
+            fragmentA,
+            fragmentB,
+            config.certificateSha256,
+            config.applicationId,
+            config.buildId,
+        )
+        val table = HardenStringTable(
+            fragmentA,
+            fragmentB,
+            arrayOf(iv),
+            arrayOf(StringCrypto.encrypt("runtime", key, iv, StringCrypto.entryAad(0))),
+        )
         val installer = RuntimeInstaller(
             antiDebugCheck = {
                 antiDebugChecks.incrementAndGet()
@@ -37,6 +55,7 @@ class HardenRuntimeTest {
                 certificateChecks.incrementAndGet()
                 true
             },
+            stringTableLoader = { _, _ -> table },
             failureRecorder = FailureRecorder(),
             terminator = ProcessTerminator { error("must not terminate") },
         )
@@ -45,6 +64,8 @@ class HardenRuntimeTest {
 
         assertEquals(1, antiDebugChecks.get())
         assertEquals(1, certificateChecks.get())
+        assertEquals("runtime", HardenStrings.decode(0))
+        HardenStrings.clear()
     }
 
     @Test
