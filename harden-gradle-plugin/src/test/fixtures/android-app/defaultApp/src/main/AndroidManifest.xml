@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
-        android:name=".BusinessApplication"
-        android:appComponentFactory=".FixtureAppComponentFactory"
-        android:label="Fixture">
+    <application android:label="Default Fixture">
         <activity
             android:name=".SmokeActivity"
             android:exported="true">
@@ -13,11 +10,11 @@
             </intent-filter>
         </activity>
         <provider
-            android:name=".MainFixtureProvider"
+            android:name=".MainProbeProvider"
             android:authorities="${applicationId}.main-probe"
             android:exported="true" />
         <provider
-            android:name=".FixtureProvider"
+            android:name=".WorkerProbeProvider"
             android:authorities="${applicationId}.worker-probe"
             android:exported="true"
             android:process=":worker" />

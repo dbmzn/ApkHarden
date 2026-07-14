@@ -142,7 +142,8 @@ class ProductionPluginFunctionalTest {
                 isNamespaceAware = true
             }.newDocumentBuilder().parse(manifest)
             val application = document.getElementsByTagName("application").item(0)
-            val provider = document.getElementsByTagName("provider").item(0)
+            val activity = document.getElementsByTagName("activity").item(0)
+            val providers = document.getElementsByTagName("provider")
             assertEquals(
                 "com.example.fixture.BusinessApplication",
                 componentName(application.attributes.getNamedItemNS(ANDROID_NAMESPACE, "name").nodeValue),
@@ -154,17 +155,16 @@ class ProductionPluginFunctionalTest {
                 ),
             )
             assertEquals(
-                "com.example.fixture.FixtureProvider",
-                componentName(provider.attributes.getNamedItemNS(ANDROID_NAMESPACE, "name").nodeValue),
+                "com.example.fixture.SmokeActivity",
+                componentName(activity.attributes.getNamedItemNS(ANDROID_NAMESPACE, "name").nodeValue),
             )
-            assertEquals(
-                "com.example.fixture.fixture-provider",
-                provider.attributes.getNamedItemNS(ANDROID_NAMESPACE, "authorities").nodeValue,
-            )
-            assertEquals(
-                ":worker",
-                provider.attributes.getNamedItemNS(ANDROID_NAMESPACE, "process").nodeValue,
-            )
+            val providerAuthorities = (0 until providers.length).associate { index ->
+                val provider = providers.item(index)
+                provider.attributes.getNamedItemNS(ANDROID_NAMESPACE, "authorities").nodeValue to
+                    provider.attributes.getNamedItemNS(ANDROID_NAMESPACE, "process")?.nodeValue
+            }
+            assertEquals(null, providerAuthorities["com.example.fixture.main-probe"])
+            assertEquals(":worker", providerAuthorities["com.example.fixture.worker-probe"])
 
             val apk = apks.single { file ->
                 "-${variant.flavor}-${variant.buildType}" in file.name

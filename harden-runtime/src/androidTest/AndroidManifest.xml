@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="com.apkharden.runtime.RuntimeProbeProvider"
+            android:authorities="${applicationId}.main-probe"
+            android:exported="false" />
+        <provider
+            android:name="com.apkharden.runtime.WorkerRuntimeProbeProvider"
+            android:authorities="${applicationId}.worker-probe"
+            android:exported="false"
+            android:process=":worker" />
+    </application>
+</manifest>

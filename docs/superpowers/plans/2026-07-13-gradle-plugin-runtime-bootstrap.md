@@ -139,6 +139,11 @@
 
 ## Task 10: Device smoke tests and phase verification
 
+Execution status (2026-07-14): runner, fixture, multi-process instrumentation,
+and local JVM/TestKit coverage are implemented. Real-device execution is
+deferred; keep Phase 2 open until API 26 and API 36/16KB plus wrong-signer and
+debugger-termination scenarios pass on the required devices.
+
 **Files:**
 - Create: `harden-device-tests/src/main/kotlin/com/apkharden/device/RuntimeSmokeRunner.kt`
 - Create: `harden-runtime/src/androidTest/java/com/apkharden/runtime/MultiProcessRuntimeTest.java`

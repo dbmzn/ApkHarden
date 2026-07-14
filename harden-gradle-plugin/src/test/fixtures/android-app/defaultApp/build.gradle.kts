@@ -9,7 +9,7 @@ val smokeKeyAlias = providers.gradleProperty("apkharden.keyAlias").orNull
 val smokeKeyPassword = providers.gradleProperty("apkharden.keyPassword").orNull
 
 android {
-    namespace = "com.example.fixture"
+    namespace = "com.example.fixture.defaultapp"
     compileSdk = 34
 
     signingConfigs {
@@ -24,43 +24,19 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.fixture"
+        applicationId = "com.example.fixture.defaultapp"
         minSdk = 23
         targetSdk = 34
         versionCode = 100
         versionName = "1.0"
     }
 
-    flavorDimensions += "abi"
-    productFlavors {
-        create("product_32") {
-            dimension = "abi"
-            ndk { abiFilters += "armeabi-v7a" }
-        }
-        create("product_64") {
-            dimension = "abi"
-            ndk { abiFilters += "arm64-v8a" }
-        }
-        create("product_all") {
-            dimension = "abi"
-        }
-    }
-
     buildTypes {
-        debug {
-            isMinifyEnabled = false
-        }
-        create("develop") {
-            initWith(getByName("debug"))
-            isMinifyEnabled = false
-        }
+        debug { isMinifyEnabled = false }
         release {
             isMinifyEnabled = true
             signingConfig = signingConfigs.findByName("smoke")
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
 }

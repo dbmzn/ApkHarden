@@ -36,6 +36,11 @@ Definition of done:
 
 ## Phase 2: Gradle Plugin and Runtime Bootstrap
 
+Status (2026-07-14): implementation and local automation are complete, but the
+phase is not marked complete because real-device certification was deferred.
+The API 29 device has partial smoke coverage; API 26, API 36/16KB, wrong-signer,
+and the final automated debugger-termination run remain mandatory.
+
 Phase-boundary plan target: `docs/superpowers/plans/2026-07-13-gradle-plugin-runtime-bootstrap.md` (write after Phase 1 APIs and tests are stable).
 
 Produces:
