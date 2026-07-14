@@ -13,6 +13,7 @@ dependencies {
     compileOnly("com.android.tools.build:gradle:8.5.1")
     implementation(project(":harden-release-core"))
     testImplementation(gradleTestKit())
+    testImplementation("com.android.tools.build:gradle:8.5.1")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
 }
 
