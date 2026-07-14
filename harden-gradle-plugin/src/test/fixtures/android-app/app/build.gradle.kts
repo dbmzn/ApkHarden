@@ -70,4 +70,5 @@ apkHarden {
         providers.gradleProperty("apkharden.certificateSha256")
             .getOrElse("ab".repeat(32)),
     )
+    excludedStrings.add("fixture-explicit-contract")
 }

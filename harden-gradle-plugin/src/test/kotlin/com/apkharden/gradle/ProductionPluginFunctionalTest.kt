@@ -9,6 +9,10 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -154,6 +158,29 @@ class ProductionPluginFunctionalTest {
             val metadata = HardenMetadataReader.read(
                 File(outputRoot, "${variant.name}/harden-metadata.json"),
             )
+            val stringReport = File(
+                outputRoot,
+                "${variant.name}/string-protection-report.json",
+            )
+            assertTrue(stringReport.isFile)
+            val reportJson = Json.parseToJsonElement(stringReport.readText()).jsonObject
+            assertEquals(variant.name, reportJson.getValue("variantName").jsonPrimitive.content)
+            assertTrue(
+                reportJson.getValue("protected").jsonObject.getValue("sites").jsonPrimitive.content.toInt() >= 3,
+            )
+            val reasonCodes = reportJson.getValue("excluded").jsonObject
+                .getValue("byReason").jsonArray
+                .map { reason -> reason.jsonObject.getValue("code").jsonPrimitive.content }
+                .toSet()
+            assertTrue("PUBLIC_CONSTANT_INLINING_RISK" in reasonCodes)
+            assertTrue("EXPLICIT_STRING_EXCLUSION" in reasonCodes)
+            assertTrue("FRAMEWORK_REFLECTION_CONTRACT" in reasonCodes)
+            val reportText = stringReport.readText()
+            REPORT_FORBIDDEN_PLAINTEXT.forEach { plaintext ->
+                assertFalse(reportText.contains(plaintext)) {
+                    "String protection report leaks plaintext: $plaintext"
+                }
+            }
             assertEquals(variant.name, metadata.variantName)
             assertEquals(variant.r8Enabled, metadata.r8Enabled)
             assertEquals(variant.abis, metadata.abis)
@@ -201,6 +228,16 @@ class ProductionPluginFunctionalTest {
             assertEquals(variant.abis, apkAbis(apk))
             assertFalse(apkDexContains(apk, PROTECTED_FIXTURE_STRING)) {
                 "Protected fixture plaintext remains in $apk"
+            }
+            PROTECTED_STRING_FIXTURES.forEach { plaintext ->
+                assertFalse(apkDexContains(apk, plaintext)) {
+                    "Protected fixture plaintext remains in $apk: $plaintext"
+                }
+            }
+            EXCLUDED_STRING_FIXTURES.forEach { plaintext ->
+                assertTrue(apkDexContains(apk, plaintext)) {
+                    "Excluded framework or API contract is missing from $apk: $plaintext"
+                }
             }
             assertTrue(GENERATED_STRING_TABLE in apkClassTypes(apk)) {
                 "Generated string table is missing from $apk"
@@ -334,6 +371,18 @@ class ProductionPluginFunctionalTest {
             "Lcom/apkharden/generated/HardenStringTableConfig;"
         const val HARDEN_RUNTIME = "Lcom/apkharden/runtime/HardenRuntime;"
         const val PROTECTED_FIXTURE_STRING = "ApkHarden smoke fixture"
+        val PROTECTED_STRING_FIXTURES = setOf(
+            "fixture-private-secret",
+            "fixture-business-secret",
+        )
+        val EXCLUDED_STRING_FIXTURES = setOf(
+            "fixture-public-contract",
+            "fixture-explicit-contract",
+            "com.example.fixture.ReflectionTarget",
+            "fixture-reflection-companion",
+        )
+        val REPORT_FORBIDDEN_PLAINTEXT =
+            PROTECTED_STRING_FIXTURES + EXCLUDED_STRING_FIXTURES + PROTECTED_FIXTURE_STRING
         const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
     }
 }

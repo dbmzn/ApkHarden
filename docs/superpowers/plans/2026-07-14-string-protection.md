@@ -66,14 +66,14 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 
 - [x] Remove ConstantValue only when dynamic initialization is proven safe.
 - [x] Generate or extend `<clinit>` with decoded assignments.
-- [ ] Report public constant semantic changes.
+- [x] Report public constant semantic changes.
 - [x] Exclude uncertain fields instead of forcing transformation.
 
 ## Task 6: Add framework-aware exclusions and reports
 
 - [x] Exclude annotation values and known Retrofit, Room, serialization, JNI,
   reflection, ServiceLoader, and resource-name contracts.
-- [ ] Produce per-variant protected/excluded counts and stable reason codes.
+- [x] Produce per-variant protected/excluded counts and stable reason codes.
 - [x] Support explicit class and string allowlists.
 
 ## Task 7: Certify fixtures and plaintext removal

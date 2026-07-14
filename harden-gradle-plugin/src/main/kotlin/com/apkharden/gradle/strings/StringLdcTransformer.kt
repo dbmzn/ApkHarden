@@ -13,12 +13,12 @@ class StringLdcTransformer(
     fun collect(
         classNode: ClassNode,
         applicationClassName: String? = null,
-    ): List<String> = eligibleMethods(classNode, applicationClassName)
-        .filterNot(FrameworkStringExclusions::excludes)
+    ): List<String> = classNode.methods
+        .filter { method -> methodStringExclusionReason(classNode, method, applicationClassName) == null }
         .flatMap { method ->
             method.instructions.toArray().mapNotNull { instruction ->
                 ((instruction as? LdcInsnNode)?.cst as? String)
-                    ?.takeIf { value -> value.isNotEmpty() && value !in excludedStrings }
+                    ?.takeIf { value -> literalStringExclusionReason(value, excludedStrings) == null }
             }
         }
 
@@ -27,13 +27,13 @@ class StringLdcTransformer(
         applicationClassName: String? = null,
     ): Int {
         var transformed = 0
-        eligibleMethods(classNode, applicationClassName)
-            .filterNot(FrameworkStringExclusions::excludes)
+        classNode.methods
+            .filter { method -> methodStringExclusionReason(classNode, method, applicationClassName) == null }
             .forEach { method ->
             method.instructions.toArray().forEach { instruction ->
                 val plaintext = (instruction as? LdcInsnNode)?.cst as? String
                     ?: return@forEach
-                if (plaintext in excludedStrings) return@forEach
+                if (literalStringExclusionReason(plaintext, excludedStrings) != null) return@forEach
                 val entryId = stringIds[plaintext] ?: return@forEach
                 instruction.cst = entryId
                 method.instructions.insert(
@@ -52,16 +52,7 @@ class StringLdcTransformer(
         return transformed
     }
 
-    private fun eligibleMethods(
-        classNode: ClassNode,
-        applicationClassName: String?,
-    ) = classNode.methods.filterNot { method ->
-        classNode.name == applicationClassName?.replace('.', '/') &&
-            method.name in APPLICATION_INITIALIZERS
-    }
-
     private companion object {
-        val APPLICATION_INITIALIZERS = setOf("<init>", "<clinit>")
         const val HARDEN_STRINGS = "com/apkharden/runtime/HardenStrings"
     }
 }
@@ -77,24 +68,47 @@ class StringProtectionSelection(
     private val excludedClassPatterns = excludedClasses.map(::ClassPattern)
 
     fun includes(className: String): Boolean {
+        return exclusionReason(className) == null
+    }
+
+    internal fun exclusionReason(className: String): StringExclusionReasonCode? {
         val internalName = className.replace('.', '/')
-        if (excludedClassPatterns.any { pattern -> pattern.matches(internalName) }) return false
-        if (internalName.startsWith("com/apkharden/runtime/")) return false
-        if (internalName.startsWith("com/apkharden/generated/")) return false
-        val simpleName = internalName.substringAfterLast('/')
-        if (simpleName == "R" || simpleName.startsWith("R$") || simpleName == "BR") return false
-        if (simpleName == "BuildConfig") return false
-        if ("/databinding/" in internalName || simpleName.startsWith("DataBinderMapper")) return false
-        if (simpleName.endsWith("AppComponentFactory")) return false
-        return packagePrefixes.any { prefix ->
-            internalName == prefix || internalName.startsWith("$prefix/")
+        if (excludedClassPatterns.any { pattern -> pattern.matches(internalName) }) {
+            return StringExclusionReasonCode.EXPLICIT_CLASS_EXCLUSION
         }
+        if (internalName.startsWith("com/apkharden/runtime/")) {
+            return StringExclusionReasonCode.HARDEN_RUNTIME_CLASS
+        }
+        if (internalName.startsWith("com/apkharden/generated/")) {
+            return StringExclusionReasonCode.GENERATED_HARDEN_CLASS
+        }
+        val simpleName = internalName.substringAfterLast('/')
+        if (simpleName == "R" || simpleName.startsWith("R$") || simpleName == "BR" || simpleName == "BuildConfig") {
+            return StringExclusionReasonCode.ANDROID_GENERATED_CLASS
+        }
+        if ("/databinding/" in internalName || simpleName.startsWith("DataBinderMapper")) {
+            return StringExclusionReasonCode.DATABINDING_CLASS
+        }
+        if (simpleName.endsWith("AppComponentFactory")) {
+            return StringExclusionReasonCode.APP_COMPONENT_FACTORY_CLASS
+        }
+        if (packagePrefixes.none { prefix ->
+            internalName == prefix || internalName.startsWith("$prefix/")
+        }) return StringExclusionReasonCode.OUTSIDE_PROTECTED_PACKAGES
+        return null
     }
 
     fun includes(classNode: ClassNode): Boolean {
-        if (!includes(classNode.name)) return false
+        return exclusionReason(classNode) == null
+    }
+
+    internal fun exclusionReason(classNode: ClassNode): StringExclusionReasonCode? {
+        exclusionReason(classNode.name)?.let { return it }
         val annotations = classNode.visibleAnnotations.orEmpty() + classNode.invisibleAnnotations.orEmpty()
-        return annotations.none { annotation -> annotation.desc in FRAMEWORK_CLASS_ANNOTATIONS }
+        if (annotations.any { annotation -> annotation.desc in FRAMEWORK_CLASS_ANNOTATIONS }) {
+            return StringExclusionReasonCode.FRAMEWORK_ANNOTATED_CLASS
+        }
+        return null
     }
 
     private class ClassPattern(value: String) {
@@ -126,22 +140,55 @@ class StringProtectionSelection(
     }
 }
 
+internal fun literalStringExclusionReason(
+    value: String,
+    excludedStrings: Set<String>,
+): StringExclusionReasonCode? = when {
+    value.isEmpty() -> StringExclusionReasonCode.EMPTY_STRING
+    value in excludedStrings -> StringExclusionReasonCode.EXPLICIT_STRING_EXCLUSION
+    else -> null
+}
+
+internal fun methodStringExclusionReason(
+    classNode: ClassNode,
+    method: MethodNode,
+    applicationClassName: String?,
+): StringExclusionReasonCode? {
+    if (
+        classNode.name == applicationClassName?.replace('.', '/') &&
+        method.name in APPLICATION_INITIALIZERS
+    ) return StringExclusionReasonCode.APPLICATION_INITIALIZER
+    return FrameworkStringExclusions.reason(method)
+}
+
 private object FrameworkStringExclusions {
-    fun excludes(method: MethodNode): Boolean = method.instructions.toArray().any { instruction ->
-        val call = instruction as? MethodInsnNode ?: return@any false
-        when {
-            call.owner == "java/lang/Class" && call.name in CLASS_REFLECTION_METHODS -> true
-            call.owner == "java/lang/ClassLoader" && call.name in CLASS_LOADER_METHODS -> true
-            call.owner == "java/lang/System" && call.name in SYSTEM_LOADING_METHODS -> true
-            call.owner == "java/lang/invoke/MethodHandles\$Lookup" && call.name.startsWith("find") -> true
-            call.owner == "java/util/ServiceLoader" && call.name == "load" -> true
-            call.owner == "android/content/res/Resources" && call.name == "getIdentifier" -> true
-            call.owner == "android/content/res/AssetManager" && call.name in ASSET_METHODS -> true
-            call.owner.startsWith("androidx/room/") -> true
-            call.owner.startsWith("androidx/sqlite/") -> true
-            call.owner.startsWith("kotlinx/serialization/") -> true
-            else -> false
+    fun reason(method: MethodNode): StringExclusionReasonCode? {
+        method.instructions.toArray().forEach { instruction ->
+            val call = instruction as? MethodInsnNode ?: return@forEach
+            val reason = when {
+                call.owner == "java/lang/Class" && call.name in CLASS_REFLECTION_METHODS ->
+                    StringExclusionReasonCode.FRAMEWORK_REFLECTION_CONTRACT
+                call.owner == "java/lang/ClassLoader" && call.name in CLASS_LOADER_METHODS ->
+                    StringExclusionReasonCode.FRAMEWORK_CLASS_LOADING_CONTRACT
+                call.owner == "java/lang/System" && call.name in SYSTEM_LOADING_METHODS ->
+                    StringExclusionReasonCode.FRAMEWORK_NATIVE_LOADING_CONTRACT
+                call.owner == "java/lang/invoke/MethodHandles\$Lookup" && call.name.startsWith("find") ->
+                    StringExclusionReasonCode.FRAMEWORK_METHOD_HANDLE_CONTRACT
+                call.owner == "java/util/ServiceLoader" && call.name == "load" ->
+                    StringExclusionReasonCode.FRAMEWORK_SERVICE_LOADER_CONTRACT
+                call.owner == "android/content/res/Resources" && call.name == "getIdentifier" ->
+                    StringExclusionReasonCode.FRAMEWORK_RESOURCE_NAME_CONTRACT
+                call.owner == "android/content/res/AssetManager" && call.name in ASSET_METHODS ->
+                    StringExclusionReasonCode.FRAMEWORK_RESOURCE_NAME_CONTRACT
+                call.owner.startsWith("androidx/room/") || call.owner.startsWith("androidx/sqlite/") ->
+                    StringExclusionReasonCode.FRAMEWORK_ROOM_CONTRACT
+                call.owner.startsWith("kotlinx/serialization/") ->
+                    StringExclusionReasonCode.FRAMEWORK_SERIALIZATION_CONTRACT
+                else -> null
+            }
+            if (reason != null) return reason
         }
+        return null
     }
 
     private val CLASS_REFLECTION_METHODS = setOf(
@@ -162,3 +209,5 @@ private object FrameworkStringExclusions {
     private val SYSTEM_LOADING_METHODS = setOf("load", "loadLibrary")
     private val ASSET_METHODS = setOf("open", "openFd", "list")
 }
+
+private val APPLICATION_INITIALIZERS = setOf("<init>", "<clinit>")

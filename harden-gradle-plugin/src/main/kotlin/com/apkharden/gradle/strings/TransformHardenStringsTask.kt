@@ -41,6 +41,9 @@ abstract class TransformHardenStringsTask : DefaultTask() {
     @get:OutputFile
     abstract val outputJar: RegularFileProperty
 
+    @get:OutputFile
+    abstract val reportFile: RegularFileProperty
+
     @get:Input
     abstract val certificateSha256: Property<String>
 
@@ -49,6 +52,9 @@ abstract class TransformHardenStringsTask : DefaultTask() {
 
     @get:Input
     abstract val buildId: Property<String>
+
+    @get:Input
+    abstract val variantName: Property<String>
 
     @get:Input
     abstract val applicationClassName: Property<String>
@@ -74,6 +80,7 @@ abstract class TransformHardenStringsTask : DefaultTask() {
             excludedClasses.get(),
         )
         val applicationClass = applicationClassName.orNull?.ifBlank { null }
+        val allNodes = linkedMapOf<String, ClassNode>()
         val nodes = linkedMapOf<String, ClassNode>()
         val collector = StringLdcTransformer(emptyMap(), excludedStrings.get())
         val constantCollector = StringConstantTransformer(emptyMap(), excludedStrings.get())
@@ -83,12 +90,19 @@ abstract class TransformHardenStringsTask : DefaultTask() {
                 val className = name.removeSuffix(CLASS_SUFFIX)
                 val node = ClassNode(Opcodes.ASM9)
                 ClassReader(bytes).accept(node, 0)
+                allNodes[name] = node
                 if (!selection.includes(node)) return@forEach
                 nodes[name] = node
                 addAll(collector.collect(node, applicationClass))
                 addAll(constantCollector.collect(node, applicationClass))
             }
         }
+        val statistics = analyzeStringProtection(
+            classNodes = allNodes.values,
+            selection = selection,
+            applicationClassName = applicationClass,
+            excludedStrings = excludedStrings.get(),
+        )
         val table = StringTableCompiler().compile(
             strings = strings,
             certificateSha256 = certificateSha256.get(),
@@ -97,13 +111,31 @@ abstract class TransformHardenStringsTask : DefaultTask() {
         )
         val transformer = StringLdcTransformer(table.ids, excludedStrings.get())
         val constantTransformer = StringConstantTransformer(table.ids, excludedStrings.get())
+        var transformedMethodSites = 0
+        var transformedConstantSites = 0
         nodes.forEach { (name, node) ->
-            transformer.transform(node, applicationClass)
-            constantTransformer.transform(node, applicationClass)
+            transformedMethodSites += transformer.transform(node, applicationClass)
+            transformedConstantSites += constantTransformer.transform(node, applicationClass)
             entries[name] = ClassWriter(0).also(node::accept).toByteArray()
+        }
+        check(transformedMethodSites == statistics.protectedMethodBodySites) {
+            "Protected method string count changed during transformation: " +
+                "$transformedMethodSites != ${statistics.protectedMethodBodySites}"
+        }
+        check(transformedConstantSites == statistics.protectedPrivateConstantSites) {
+            "Protected constant count changed during transformation: " +
+                "$transformedConstantSites != ${statistics.protectedPrivateConstantSites}"
         }
         entries[CompiledStringTable.GENERATED_TABLE_ENTRY] = table.classBytes()
         writeOutput(entries)
+        StringProtectionReportWriter.write(
+            StringProtectionReport(
+                variantName = variantName.get(),
+                uniqueProtectedStrings = table.ids.size,
+                statistics = statistics,
+            ),
+            reportFile.get().asFile,
+        )
     }
 
     private fun readInputs(): java.util.SortedMap<String, ByteArray> = sortedMapOf<String, ByteArray>().apply {
@@ -169,6 +201,7 @@ internal fun registerStringProtectionTransform(
         transform.certificateSha256.set(extension.certificateSha256)
         transform.applicationId.set(descriptor.applicationId)
         transform.buildId.set(buildId)
+        transform.variantName.set(descriptor.name)
         transform.protectedPackages.set(extension.protectedPackages)
         transform.excludedClasses.set(extension.excludedClasses)
         transform.excludedStrings.set(extension.excludedStrings)
@@ -176,6 +209,11 @@ internal fun registerStringProtectionTransform(
             variant.artifacts.get(SingleArtifact.MERGED_MANIFEST).map { manifest ->
                 ManifestApplicationResolver.resolve(manifest.asFile).orEmpty()
             },
+        )
+        transform.reportFile.set(
+            project.layout.buildDirectory.file(
+                "outputs/apk-harden/${descriptor.name}/string-protection-report.json",
+            ),
         )
     }
     variant.artifacts.forScope(ScopedArtifacts.Scope.PROJECT)
