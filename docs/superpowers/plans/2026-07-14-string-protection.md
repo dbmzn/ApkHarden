@@ -64,10 +64,10 @@ and decrypts entries lazily into an `AtomicReferenceArray<String>` cache.
 
 ## Task 5: Transform safe constant fields
 
-- [ ] Remove ConstantValue only when dynamic initialization is proven safe.
-- [ ] Generate or extend `<clinit>` with decoded assignments.
+- [x] Remove ConstantValue only when dynamic initialization is proven safe.
+- [x] Generate or extend `<clinit>` with decoded assignments.
 - [ ] Report public constant semantic changes.
-- [ ] Exclude uncertain fields instead of forcing transformation.
+- [x] Exclude uncertain fields instead of forcing transformation.
 
 ## Task 6: Add framework-aware exclusions and reports
 

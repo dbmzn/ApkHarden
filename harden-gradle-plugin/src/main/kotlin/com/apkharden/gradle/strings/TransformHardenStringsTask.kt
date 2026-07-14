@@ -76,6 +76,7 @@ abstract class TransformHardenStringsTask : DefaultTask() {
         val applicationClass = applicationClassName.orNull?.ifBlank { null }
         val nodes = linkedMapOf<String, ClassNode>()
         val collector = StringLdcTransformer(emptyMap(), excludedStrings.get())
+        val constantCollector = StringConstantTransformer(emptyMap(), excludedStrings.get())
         val strings = buildList {
             entries.forEach { (name, bytes) ->
                 if (!name.endsWith(CLASS_SUFFIX)) return@forEach
@@ -85,6 +86,7 @@ abstract class TransformHardenStringsTask : DefaultTask() {
                 if (!selection.includes(node)) return@forEach
                 nodes[name] = node
                 addAll(collector.collect(node, applicationClass))
+                addAll(constantCollector.collect(node, applicationClass))
             }
         }
         val table = StringTableCompiler().compile(
@@ -94,8 +96,10 @@ abstract class TransformHardenStringsTask : DefaultTask() {
             buildId = buildId.get(),
         )
         val transformer = StringLdcTransformer(table.ids, excludedStrings.get())
+        val constantTransformer = StringConstantTransformer(table.ids, excludedStrings.get())
         nodes.forEach { (name, node) ->
             transformer.transform(node, applicationClass)
+            constantTransformer.transform(node, applicationClass)
             entries[name] = ClassWriter(0).also(node::accept).toByteArray()
         }
         entries[CompiledStringTable.GENERATED_TABLE_ENTRY] = table.classBytes()
