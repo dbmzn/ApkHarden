@@ -2,6 +2,7 @@ package com.apkharden.gradle
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.ApplicationVariant
+import com.apkharden.gradle.task.registerVariantGenerationTasks
 import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
@@ -23,8 +24,8 @@ class ApkHardenPlugin : Plugin<Project> {
             val androidComponents = project.extensions.getByType(
                 ApplicationAndroidComponentsExtension::class.java,
             )
-            registerApplicationVariants(androidComponents, extension) { _, descriptor ->
-                project.logger.info("ApkHarden discovered application variant {}", descriptor.name)
+            registerApplicationVariants(androidComponents, extension) { variant, descriptor ->
+                registerVariantGenerationTasks(project, extension, variant, descriptor)
             }
         }
         project.afterEvaluate {
