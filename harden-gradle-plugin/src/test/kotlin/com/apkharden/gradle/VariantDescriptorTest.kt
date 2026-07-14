@@ -5,6 +5,7 @@ import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.ApplicationVariant
 import com.android.build.api.variant.ExternalNativeBuild
 import com.android.build.api.variant.VariantSelector
+import java.io.File
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import org.gradle.api.Action
@@ -69,6 +70,45 @@ class VariantDescriptorTest {
         )
 
         assertEquals(emptySet<String>(), descriptor.abiFilters)
+    }
+
+    @Test
+    fun `ABI filters merge every configured variant dimension`() {
+        assertEquals(
+            setOf("armeabi-v7a", "arm64-v8a", "x86_64"),
+            mergeAbiFilters(
+                setOf("armeabi-v7a"),
+                setOf("arm64-v8a"),
+                emptySet(),
+                setOf("x86_64"),
+            ),
+        )
+    }
+
+    @Test
+    fun `ABI discovery falls back to native source directories`() {
+        val root = File("build/tmp/variant-descriptor-test/${System.nanoTime()}")
+        try {
+            File(root, "armeabi-v7a/libapp.so").apply {
+                parentFile.mkdirs()
+                writeText("fixture")
+            }
+            File(root, "arm64-v8a/libapp.so").apply {
+                parentFile.mkdirs()
+                writeText("fixture")
+            }
+            File(root, "notes/readme.txt").apply {
+                parentFile.mkdirs()
+                writeText("ignored")
+            }
+
+            assertEquals(
+                setOf("armeabi-v7a", "arm64-v8a"),
+                discoverSourceAbis(listOf(root)),
+            )
+        } finally {
+            root.deleteRecursively()
+        }
     }
 
     @Test

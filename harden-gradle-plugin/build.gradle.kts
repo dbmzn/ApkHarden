@@ -9,8 +9,14 @@ repositories {
     gradlePluginPortal()
 }
 
+val functionalTestPluginClasspath by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
 dependencies {
     compileOnly("com.android.tools.build:gradle:8.5.1")
+    functionalTestPluginClasspath("com.android.tools.build:gradle:8.5.1")
     implementation(project(":harden-release-core"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.ow2.asm:asm:9.6")
@@ -19,11 +25,26 @@ dependencies {
     testImplementation("com.android.tools.build:gradle:8.5.1")
     testImplementation("org.ow2.asm:asm-tree:9.6")
     testImplementation("org.ow2.asm:asm-util:9.6")
+    testImplementation("com.android.tools.smali:smali-dexlib2:3.0.5")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
 }
 
 kotlin { jvmToolchain(17) }
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    dependsOn(":harden-runtime:bundleReleaseAar")
+    systemProperty(
+        "apkharden.runtime.aar",
+        project(":harden-runtime").layout.buildDirectory
+            .file("outputs/aar/harden-runtime-release.aar")
+            .get()
+            .asFile
+            .absolutePath,
+    )
+}
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.from(functionalTestPluginClasspath)
+}
 
 gradlePlugin {
     plugins {

@@ -93,10 +93,10 @@ class ApplicationInstallVisitorFactoryTest {
         }
 
         registerApplicationInstrumentation(variant)
-        val parameterManifest = project.objects.fileProperty()
+        val parameterApplicationClassName = project.objects.property(String::class.java)
         val parameters = proxy<ApplicationInstallVisitorFactory.Parameters> { method, _ ->
             when (method.name) {
-                "getMergedManifest" -> parameterManifest
+                "getApplicationClassName" -> parameterApplicationClassName
                 else -> unsupported(method)
             }
         }
@@ -104,7 +104,7 @@ class ApplicationInstallVisitorFactoryTest {
 
         assertEquals(ApplicationInstallVisitorFactory::class.java, factoryClass)
         assertEquals(InstrumentationScope.ALL, scope)
-        assertEquals(manifest, parameterManifest.get().asFile)
+        assertEquals("com.example.App", parameterApplicationClassName.get())
         assertEquals(FramesComputationMode.COMPUTE_FRAMES_FOR_INSTRUMENTED_METHODS, framesMode)
     }
 

@@ -1,0 +1,2 @@
+# Fixture business rules remain owned by the application.
+-keep class com.example.fixture.BusinessApplication { *; }

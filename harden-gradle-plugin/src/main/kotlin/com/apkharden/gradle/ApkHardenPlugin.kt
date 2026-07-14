@@ -1,5 +1,6 @@
 package com.apkharden.gradle
 
+import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.ApplicationVariant
 import com.apkharden.gradle.instrumentation.registerApplicationInstrumentation
@@ -27,7 +28,8 @@ class ApkHardenPlugin : Plugin<Project> {
             val androidComponents = project.extensions.getByType(
                 ApplicationAndroidComponentsExtension::class.java,
             )
-            registerApplicationVariants(androidComponents, extension) { variant, descriptor ->
+            val android = project.extensions.getByType(ApplicationExtension::class.java)
+            registerApplicationVariants(androidComponents, extension, android) { variant, descriptor ->
                 registerVariantGenerationTasks(project, extension, variant, descriptor)
                 registerDefaultApplicationManifestTransform(project, variant)
                 registerApplicationInstrumentation(variant)
@@ -71,11 +73,16 @@ internal fun configureRuntimeSupport(
 internal fun registerApplicationVariants(
     androidComponents: ApplicationAndroidComponentsExtension,
     extension: ApkHardenExtension,
+    android: ApplicationExtension? = null,
     onVariant: (ApplicationVariant, VariantDescriptor) -> Unit,
 ) {
     val allVariants = androidComponents.selector().all()
     androidComponents.onVariants(allVariants, Action { variant ->
-        val descriptor = VariantDescriptor.from(variant)
+        val descriptor = VariantDescriptor.from(
+            variant,
+            android?.let { resolveAbiFilters(it, variant) }
+                ?: variant.externalNativeBuild?.abiFilters?.getOrElse(emptySet()).orEmpty(),
+        )
         if (extension.enabled.get() && descriptor.name !in extension.excludedVariants.get()) {
             onVariant(variant, descriptor)
         }

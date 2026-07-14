@@ -10,49 +10,28 @@ import com.android.build.api.instrumentation.InstrumentationScope
 import com.android.build.api.variant.ApplicationVariant
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
-import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
 import org.objectweb.asm.ClassVisitor
 import org.w3c.dom.Element
 
 abstract class ApplicationInstallVisitorFactory :
     AsmClassVisitorFactory<ApplicationInstallVisitorFactory.Parameters> {
     interface Parameters : InstrumentationParameters {
-        @get:InputFile
-        @get:PathSensitive(PathSensitivity.NONE)
-        val mergedManifest: RegularFileProperty
+        @get:Input
+        val applicationClassName: Property<String>
     }
 
-    @Transient
-    @Volatile
-    private var manifestResolved = false
-
-    @Transient
-    private var applicationClassName: String? = null
-
     override fun isInstrumentable(classData: ClassData): Boolean =
-        isApplicationClass(classData.className, resolveApplicationClass())
+        isApplicationClass(
+            classData.className,
+            parameters.get().applicationClassName.orNull?.ifBlank { null },
+        )
 
     override fun createClassVisitor(
         classContext: ClassContext,
         nextClassVisitor: ClassVisitor,
     ): ClassVisitor = ApplicationInstallVisitor(nextClassVisitor)
-
-    private fun resolveApplicationClass(): String? {
-        if (!manifestResolved) {
-            synchronized(this) {
-                if (!manifestResolved) {
-                    applicationClassName = ManifestApplicationResolver.resolve(
-                        parameters.get().mergedManifest.get().asFile,
-                    )
-                    manifestResolved = true
-                }
-            }
-        }
-        return applicationClassName
-    }
 }
 
 internal object ManifestApplicationResolver {
@@ -104,7 +83,11 @@ internal fun registerApplicationInstrumentation(variant: ApplicationVariant) {
         ApplicationInstallVisitorFactory::class.java,
         InstrumentationScope.ALL,
     ) { parameters ->
-        parameters.mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+        parameters.applicationClassName.set(
+            variant.artifacts.get(SingleArtifact.MERGED_MANIFEST).map { manifest ->
+                ManifestApplicationResolver.resolve(manifest.asFile).orEmpty()
+            },
+        )
     }
     variant.instrumentation.setAsmFramesComputationMode(
         FramesComputationMode.COMPUTE_FRAMES_FOR_INSTRUMENTED_METHODS,

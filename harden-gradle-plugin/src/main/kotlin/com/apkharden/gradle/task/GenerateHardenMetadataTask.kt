@@ -174,9 +174,6 @@ internal fun registerVariantGenerationTasks(
         task.configureInputs(extension, variant, descriptor)
         task.versionCode.set(versionCodeProvider)
         task.buildId.set(buildIdProvider)
-        task.outputDirectory.set(
-            project.layout.buildDirectory.dir("generated/source/apkHarden/${descriptor.name}"),
-        )
     }
 
     val javaSources = variant.sources.java ?: throw GradleException(
