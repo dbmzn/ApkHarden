@@ -43,6 +43,10 @@ class ApplicationInstallVisitorFactoryTest {
         assertTrue(isApplicationClass("com.example.App", "com.example.App"))
         assertFalse(isApplicationClass("com.example.AppHelper", "com.example.App"))
         assertFalse(isApplicationClass("com/example/App", "com.example.App"))
+        assertFalse(isApplicationClass(
+            "com.apkharden.runtime.HardenApplication",
+            "com.apkharden.runtime.HardenApplication",
+        ))
     }
 
     @Test

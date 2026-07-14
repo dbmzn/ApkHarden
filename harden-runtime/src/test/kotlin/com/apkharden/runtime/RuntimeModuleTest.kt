@@ -20,4 +20,14 @@ class RuntimeModuleTest {
 
         assertTrue(Modifier.isStatic(install.modifiers))
     }
+
+    @Test fun `generated config loader reads static HardenConfig instance`() {
+        val config = GeneratedConfigLoader.load(
+            "com.apkharden.runtime.fixture.TestGeneratedConfig",
+            requireNotNull(javaClass.classLoader),
+        )
+
+        assertEquals("com.example.app", config.applicationId)
+        assertEquals("release", config.variantName)
+    }
 }

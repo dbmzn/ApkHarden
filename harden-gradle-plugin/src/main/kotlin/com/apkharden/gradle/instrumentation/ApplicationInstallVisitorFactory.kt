@@ -93,7 +93,11 @@ internal object ManifestApplicationResolver {
 }
 
 internal fun isApplicationClass(className: String, applicationClassName: String?): Boolean =
-    applicationClassName != null && className == applicationClassName
+    applicationClassName != null &&
+        applicationClassName != DEFAULT_HARDEN_APPLICATION &&
+        className == applicationClassName
+
+private const val DEFAULT_HARDEN_APPLICATION = "com.apkharden.runtime.HardenApplication"
 
 internal fun registerApplicationInstrumentation(variant: ApplicationVariant) {
     variant.instrumentation.transformClassesWith(
