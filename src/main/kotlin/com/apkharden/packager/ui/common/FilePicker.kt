@@ -6,6 +6,7 @@ import org.lwjgl.util.nfd.NativeFileDialog.NFD_FreePath
 import org.lwjgl.util.nfd.NativeFileDialog.NFD_Init
 import org.lwjgl.util.nfd.NativeFileDialog.NFD_OKAY
 import org.lwjgl.util.nfd.NativeFileDialog.NFD_OpenDialog
+import org.lwjgl.util.nfd.NativeFileDialog.NFD_PickFolder
 import org.lwjgl.util.nfd.NativeFileDialog.NFD_Quit
 import org.lwjgl.util.nfd.NativeFileDialog.NFD_SaveDialog
 
@@ -33,6 +34,21 @@ fun pickFile(
             else
                 NFD_OpenDialog(outPath, filters, null as CharSequence?)
             if (result != NFD_OKAY) return null
+            val path = outPath.getStringUTF8(0)
+            NFD_FreePath(outPath.get(0))
+            return path
+        }
+    } finally {
+        NFD_Quit()
+    }
+}
+
+fun pickDirectory(): String? {
+    NFD_Init()
+    try {
+        MemoryStack.stackPush().use { stack ->
+            val outPath = stack.mallocPointer(1)
+            if (NFD_PickFolder(outPath, null as CharSequence?) != NFD_OKAY) return null
             val path = outPath.getStringUTF8(0)
             NFD_FreePath(outPath.get(0))
             return path

@@ -28,6 +28,7 @@ val lwjglNatives = System.getProperty("os.name").lowercase().let { os ->
 
 dependencies {
     implementation(compose.desktop.currentOs)
+    implementation(project(":harden-release-core"))
     implementation("com.android.tools.build:apksig:8.3.2")
     implementation("io.github.reandroid:ARSCLib:1.3.8")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

@@ -40,10 +40,20 @@ fun HardenScreen() {
     }
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text("基础加固", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.onBackground)
+        Text("实验加固", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.onBackground)
         Text("DEX 整体加壳 · 签名校验防二次打包 · V1+V2+V3 重签",
             style = MaterialTheme.typography.caption, color = sem.subtle,
-            modifier = Modifier.padding(top = 2.dp, bottom = 14.dp))
+            modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
+        Text(
+            "实验模式，不允许用于正式发布",
+            style = MaterialTheme.typography.body2,
+            color = MaterialTheme.colors.error,
+            modifier = Modifier.fillMaxWidth()
+                .background(MaterialTheme.colors.error.copy(alpha = 0.08f))
+                .border(1.dp, MaterialTheme.colors.error.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                .padding(10.dp),
+        )
+        Spacer(Modifier.height(10.dp))
 
         Column(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),

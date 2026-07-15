@@ -10,6 +10,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.ui.harden.HardenScreen
+import com.apkharden.packager.ui.release.ReleaseScreen
 import com.apkharden.packager.ui.scan.ScanScreen
 import com.apkharden.packager.ui.theme.AppTheme
 import com.apkharden.packager.ui.theme.LocalSemantic
@@ -26,7 +28,12 @@ import com.apkharden.packager.ui.tool.Tool
 
 private val tools: List<Tool> = listOf(
     object : Tool {
-        override val id = "harden"; override val title = "基础加固"
+        override val id = "release"; override val title = "生产发布"
+        override val icon = Icons.Default.CheckCircle
+        @Composable override fun Content() = ReleaseScreen()
+    },
+    object : Tool {
+        override val id = "harden"; override val title = "实验加固"
         override val icon = Icons.Default.Lock
         @Composable override fun Content() = HardenScreen()
     },
