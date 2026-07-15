@@ -18,12 +18,12 @@ but is explicitly labeled experimental and cannot produce a production status.
 
 ## Task 2: Add the statically gated release workflow
 
-- [ ] Analyze online APK, candidate APK, metadata, and keystore before signing.
-- [ ] Refuse export unless the pre-sign status is `STATIC_VERIFIED`.
-- [ ] Sign to a staging directory and verify non-signature APK content is unchanged.
-- [ ] Re-run the complete analyzer against the signed APK.
-- [ ] Atomically publish APK, JSON, HTML, PEM, and checksums as one release bundle.
-- [ ] Leave no formal bundle when analysis, signing, or post-sign verification fails.
+- [x] Analyze online APK, candidate APK, metadata, and keystore before signing.
+- [x] Refuse export unless the pre-sign status is `STATIC_VERIFIED`.
+- [x] Sign to a staging directory and verify non-signature APK content is unchanged.
+- [x] Re-run the complete analyzer against the signed APK.
+- [x] Atomically publish APK, JSON, HTML, PEM, and checksums as one release bundle.
+- [x] Leave no formal bundle when analysis, signing, or post-sign verification fails.
 
 ## Task 3: Add the desktop production-release tool
 
