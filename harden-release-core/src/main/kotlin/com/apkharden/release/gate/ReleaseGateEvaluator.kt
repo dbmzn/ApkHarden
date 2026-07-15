@@ -10,7 +10,7 @@ object ReleaseGateEvaluator {
     fun evaluate(
         online: ApkIdentity,
         candidate: ApkIdentity,
-        metadata: HardenMetadata,
+        metadata: HardenMetadata?,
         keystore: KeystoreIdentity,
     ): List<ReleaseFinding> = buildList {
         blocker(
@@ -90,41 +90,43 @@ object ReleaseGateEvaluator {
             )
         }
 
-        blocker(
-            metadata.applicationId != candidate.packageName,
-            "METADATA_PACKAGE_MISMATCH",
-            "Metadata applicationId differs from candidate",
-        )
-        blocker(
-            metadata.versionCode != candidate.versionCode,
-            "METADATA_VERSION_MISMATCH",
-            "Metadata versionCode differs from candidate",
-        )
-        blocker(
-            metadata.minSdk != candidate.minSdk,
-            "METADATA_MIN_SDK_MISMATCH",
-            "Metadata minSdk differs from candidate",
-        )
-        blocker(
-            metadata.targetSdk != candidate.targetSdk,
-            "METADATA_TARGET_SDK_MISMATCH",
-            "Metadata targetSdk differs from candidate",
-        )
-        blocker(
-            metadata.debuggable != candidate.debuggable,
-            "METADATA_DEBUGGABLE_MISMATCH",
-            "Metadata debuggable differs from candidate",
-        )
-        blocker(
-            metadata.abis != candidate.abis,
-            "METADATA_ABI_MISMATCH",
-            "Metadata ABI set differs from candidate",
-        )
-        blocker(
-            metadata.expectedCertificateSha256 != keystore.certificateSha256,
-            "METADATA_CERT_KEYSTORE_MISMATCH",
-            "Metadata certificate differs from keystore",
-        )
+        if (metadata != null) {
+            blocker(
+                metadata.applicationId != candidate.packageName,
+                "METADATA_PACKAGE_MISMATCH",
+                "Metadata applicationId differs from candidate",
+            )
+            blocker(
+                metadata.versionCode != candidate.versionCode,
+                "METADATA_VERSION_MISMATCH",
+                "Metadata versionCode differs from candidate",
+            )
+            blocker(
+                metadata.minSdk != candidate.minSdk,
+                "METADATA_MIN_SDK_MISMATCH",
+                "Metadata minSdk differs from candidate",
+            )
+            blocker(
+                metadata.targetSdk != candidate.targetSdk,
+                "METADATA_TARGET_SDK_MISMATCH",
+                "Metadata targetSdk differs from candidate",
+            )
+            blocker(
+                metadata.debuggable != candidate.debuggable,
+                "METADATA_DEBUGGABLE_MISMATCH",
+                "Metadata debuggable differs from candidate",
+            )
+            blocker(
+                metadata.abis != candidate.abis,
+                "METADATA_ABI_MISMATCH",
+                "Metadata ABI set differs from candidate",
+            )
+            blocker(
+                metadata.expectedCertificateSha256 != keystore.certificateSha256,
+                "METADATA_CERT_KEYSTORE_MISMATCH",
+                "Metadata certificate differs from keystore",
+            )
+        }
 
         approval(
             candidate.minSdk > online.minSdk,

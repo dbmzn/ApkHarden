@@ -12,8 +12,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.apkharden.packager.core.HardenPipeline
+import com.apkharden.packager.core.ProductionHardenPipeline
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.theme.LocalSemantic
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +31,7 @@ fun HardenScreen() {
     var alias by remember { mutableStateOf("") }
     var storePass by remember { mutableStateOf("") }
     var keyPass by remember { mutableStateOf("") }
+    var showPasswords by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
     val logs = remember { mutableStateListOf<String>() }
     val scope = rememberCoroutineScope()
@@ -40,17 +43,17 @@ fun HardenScreen() {
     }
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Text("实验加固", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.onBackground)
-        Text("DEX 整体加壳 · 签名校验防二次打包 · V1+V2+V3 重签",
+        Text("APK 加固", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.onBackground)
+        Text("静态守卫注入 · 签名校验 · 反调试 · 16KB 对齐 · V1+V2+V3 重签",
             style = MaterialTheme.typography.caption, color = sem.subtle,
             modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
         Text(
-            "实验模式，不允许用于正式发布",
+            "无需修改业务 App，也无需接入 Gradle 插件；选择 APK 和正式签名后直接生成加固包",
             style = MaterialTheme.typography.body2,
-            color = MaterialTheme.colors.error,
+            color = sem.advice,
             modifier = Modifier.fillMaxWidth()
-                .background(MaterialTheme.colors.error.copy(alpha = 0.08f))
-                .border(1.dp, MaterialTheme.colors.error.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                .background(sem.advice.copy(alpha = 0.08f))
+                .border(1.dp, sem.advice.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
                 .padding(10.dp),
         )
         Spacer(Modifier.height(10.dp))
@@ -73,12 +76,18 @@ fun HardenScreen() {
             }
 
             field("别名 alias", alias) { alias = it }
-            field("keystore 密码", storePass) { storePass = it }
-            field("key 密码", keyPass) { keyPass = it }
+            passwordField("keystore 密码", storePass, showPasswords) { storePass = it }
+            passwordField("key 密码", keyPass, showPasswords) { keyPass = it }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = showPasswords, onCheckedChange = { showPasswords = it })
+                Text("显示密码", style = MaterialTheme.typography.body2)
+            }
         }
 
         Button(
-            enabled = !running && inputApk.isNotBlank() && outputApk.isNotBlank() && keystore.isNotBlank() && alias.isNotBlank(),
+            enabled = !running && inputApk.isNotBlank() && outputApk.isNotBlank() &&
+                keystore.isNotBlank() && alias.isNotBlank() &&
+                storePass.isNotEmpty() && keyPass.isNotEmpty(),
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             shape = RoundedCornerShape(10.dp),
             elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
@@ -87,7 +96,7 @@ fun HardenScreen() {
                 scope.launch {
                     try {
                         withContext(Dispatchers.IO) {
-                            HardenPipeline.harden(
+                            ProductionHardenPipeline.harden(
                                 input = File(inputApk), output = File(outputApk),
                                 keystore = File(keystore), storePass = storePass, alias = alias, keyPass = keyPass,
                                 log = { line -> scope.launch { logs.add(line) } },
@@ -101,7 +110,7 @@ fun HardenScreen() {
                     }
                 }
             },
-        ) { Text(if (running) "加固中…" else "开始加固") }
+        ) { Text(if (running) "加固中…" else "开始加固并签名") }
 
         Text("日志", style = MaterialTheme.typography.subtitle2, color = sem.subtle,
             modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
@@ -143,4 +152,22 @@ private fun fileRow(label: String, value: String, onChange: (String) -> Unit, on
 private fun field(label: String, value: String, onChange: (String) -> Unit) {
     OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true,
         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+}
+
+@Composable
+private fun passwordField(
+    label: String,
+    value: String,
+    visible: Boolean,
+    onChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+    )
 }

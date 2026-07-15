@@ -28,6 +28,18 @@ class ReleaseGateEvaluatorTest {
     }
 
     @Test
+    fun `valid upload-only update does not require plugin metadata`() {
+        val findings = ReleaseGateEvaluator.evaluate(
+            online = apk("com.example.app", 10),
+            candidate = apk("com.example.app", 11),
+            metadata = null,
+            keystore = KeystoreIdentity("release", certA, "CN=Release"),
+        )
+
+        assertEquals(emptyList<ReleaseFinding>(), findings)
+    }
+
+    @Test
     fun `identity version build flags and split are blockers`() {
         val findings = ReleaseGateEvaluator.evaluate(
             online = apk("com.example.old", 10),

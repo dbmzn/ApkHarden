@@ -145,6 +145,39 @@ class RuntimeSmokeRunnerTest {
         assertTrue(executor.commands.any { "forward --remove tcp:8700" in it.joinToString(" ") })
     }
 
+    @Test
+    fun `data preservation reinstalls old then updates to new APK`() {
+        val executor = ScenarioExecutor(
+            pidResponses = ArrayDeque(listOf("321\n", "", "654\n")),
+            contentResponses = ArrayDeque(
+                listOf(
+                    "Result: marker=written\n",
+                    "Result: marker=preserved-marker\n",
+                ),
+            ),
+        )
+        val result = RuntimeSmokeRunner(
+            AdbClient("adb", "device-29", executor),
+            wait = {},
+        ).verifyDataPreserved(
+            DataPreservationTarget(
+                oldApk = "old.apk",
+                newApk = "new.apk",
+                packageName = "com.example.fixture",
+                activity = ".SmokeActivity",
+                dataProbeUri = "content://com.example.fixture.main",
+            ),
+        )
+
+        assertTrue(result.passed)
+        assertTrue(result.dataPreserved)
+        assertTrue(executor.commands.any { "uninstall com.example.fixture" in it.joinToString(" ") })
+        assertTrue(executor.commands.any { "install -r old.apk" in it.joinToString(" ") })
+        assertTrue(executor.commands.any { "install -r new.apk" in it.joinToString(" ") })
+        assertTrue(executor.commands.any { "--method write-data" in it.joinToString(" ") })
+        assertTrue(executor.commands.any { "--method read-data" in it.joinToString(" ") })
+    }
+
     private class RecordingExecutor(
         private val responses: Map<List<String>, String>,
     ) : CommandExecutor {
@@ -160,6 +193,7 @@ class RuntimeSmokeRunnerTest {
     private class ScenarioExecutor(
         private val pidResponses: ArrayDeque<String>,
         private val logcat: String = "",
+        private val contentResponses: ArrayDeque<String> = ArrayDeque(),
     ) : CommandExecutor {
         val commands = mutableListOf<List<String>>()
 
@@ -169,7 +203,8 @@ class RuntimeSmokeRunnerTest {
             val output = when {
                 "pidof" in text -> pidResponses.removeFirstOrNull().orEmpty()
                 "forward tcp:0" in text -> "8700\n"
-                "content call" in text -> "Result: Bundle[{process=ok}]\n"
+                "content" in text && "--method" in text -> contentResponses.removeFirstOrNull()
+                    ?: "Result: Bundle[{process=ok}]\n"
                 "logcat -d" in text -> logcat
                 else -> "Success\n"
             }

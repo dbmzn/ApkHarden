@@ -11,7 +11,6 @@ object ReleaseCheckCli {
     private val required = setOf(
         "online",
         "candidate",
-        "metadata",
         "keystore",
         "alias",
         "report",
@@ -46,7 +45,7 @@ object ReleaseCheckCli {
                     ReleaseRequest(
                         onlineApk = File(values.getValue("online")),
                         candidateApk = File(values.getValue("candidate")),
-                        metadataFile = File(values.getValue("metadata")),
+                        metadataFile = values["metadata"]?.let(::File),
                         keystore = KeystoreRequest(
                             file = File(values.getValue("keystore")),
                             storePassword = storeChars,
@@ -90,8 +89,9 @@ object ReleaseCheckCli {
 
     private fun usageError(): Int {
         System.err.println(
-            "Usage: --online old.apk --candidate new.apk --metadata metadata.json " +
-                "--keystore release.jks --alias alias --report report.json"
+            "Usage: --online old.apk --candidate new.apk " +
+                "[--metadata metadata.json] --keystore release.jks " +
+                "--alias alias --report report.json"
         )
         return 2
     }

@@ -74,7 +74,8 @@ data class KeystoreRequest(
 data class ReleaseRequest(
     val onlineApk: File,
     val candidateApk: File,
-    val metadataFile: File,
+    /** Optional build-time metadata supplied by the Gradle plugin for stronger cross-checks. */
+    val metadataFile: File? = null,
     val keystore: KeystoreRequest,
     val approvedFindingCodes: Set<String> = emptySet(),
 )

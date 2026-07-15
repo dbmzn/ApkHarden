@@ -50,6 +50,17 @@ class ProductionReleaseWorkflowTest {
     }
 
     @Test
+    fun `upload-only candidate exports without plugin metadata`() {
+        val request = validRequest().copy(metadataFile = null)
+
+        val bundle = ProductionReleaseWorkflow.export(request, File(temp, "upload-only"))
+
+        assertEquals(ReleaseStatus.STATIC_VERIFIED, bundle.assessment.status)
+        assertEquals("release-apk-v11", bundle.directory.name)
+        assertEquals("app-apk-v11-hardened.apk", bundle.apk.name)
+    }
+
+    @Test
     fun `blocked candidate exports no release bundle`() {
         val online = signed("com.example.blocked", 10, "blocked-online.apk")
         val candidate = TestApkFactory.createUnsigned(temp, "com.example.blocked", 10)

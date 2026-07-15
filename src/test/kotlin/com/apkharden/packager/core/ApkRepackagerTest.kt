@@ -29,53 +29,50 @@ class ApkRepackagerTest {
     private fun read(f: File, n: String) = ZipFile(f).use { z -> z.getInputStream(z.getEntry(n)).readBytes() }
 
     @Test
-    fun `repackages with shell dex, patched manifest, encrypted assets, no old sig`() {
-        val out = File(tmp, "out.apk")
-        ApkRepackager.repackage(
-            input = fakeApk(),
-            output = out,
-            patchedManifest = "NEWMANIFEST".toByteArray(),
-            shellDex = "SHELL".toByteArray(),
-            encryptedDexes = listOf("ENC0".toByteArray(), "ENC1".toByteArray()),
-        )
-        val n = names(out)
-        assertTrue(n.contains("res/a"))
-        assertEquals("RES", String(read(out, "res/a")))
-        assertEquals("NEWMANIFEST", String(read(out, "AndroidManifest.xml")))
-        assertEquals("SHELL", String(read(out, "classes.dex")))
-        assertEquals("ENC0", String(read(out, Constants.encryptedDexEntry(0))))
-        assertEquals("ENC1", String(read(out, Constants.encryptedDexEntry(1))))
-        assertFalse(n.any { it.startsWith("META-INF/") }) // old signatures dropped
-        assertFalse(n.contains("classes2.dex"))
-    }
-
-    @Test
-    fun `stored native libs are page-aligned to 4096`() {
-        // Uncompressed .so must start on a 4096 boundary or install fails with
+    fun `stored native libs are page-aligned to 16384`() {
+        // Uncompressed .so must start on a 16KB boundary for modern page-size devices.
         // INSTALL_FAILED_INVALID_APK "Failed to extract native libraries".
         val so = ByteArray(10_000) { (it % 7).toByte() }
         val input = File(tmp, "in.apk")
         ZipOutputStream(input.outputStream()).use { z ->
-            z.putNextEntry(ZipEntry("AndroidManifest.xml")); z.write("M".toByteArray()); z.closeEntry()
-            z.putNextEntry(ZipEntry("classes.dex")); z.write("dex0".toByteArray()); z.closeEntry()
             // a STORED native lib, like an extractNativeLibs=false build
             val e = ZipEntry("lib/arm64-v8a/libfoo.so").apply {
                 method = ZipEntry.STORED; size = so.size.toLong(); compressedSize = so.size.toLong()
                 crc = CRC32().apply { update(so) }.value
             }
             z.putNextEntry(e); z.write(so); z.closeEntry()
+            z.putNextEntry(ZipEntry("AndroidManifest.xml")); z.write("M".toByteArray()); z.closeEntry()
+            z.putNextEntry(ZipEntry("classes.dex")); z.write("dex0".toByteArray()); z.closeEntry()
         }
 
         val out = File(tmp, "out.apk")
-        ApkRepackager.repackage(
-            input = input, output = out,
+        ApkRepackager.injectGuard(
+            input = input,
+            output = out,
             patchedManifest = "NEWMANIFEST".toByteArray(),
-            shellDex = "SHELL".toByteArray(),
-            encryptedDexes = listOf("ENC0".toByteArray()),
+            guardDex = "GUARD".toByteArray(),
         )
 
-        assertEquals(0L, dataOffset(out, "lib/arm64-v8a/libfoo.so") % 4096,
-            "native lib data must be 4096-aligned")
+        assertEquals(0L, dataOffset(out, "lib/arm64-v8a/libfoo.so") % 16384,
+            "native lib data must be 16384-aligned")
+    }
+
+    @Test
+    fun `static guard injection preserves business dex and appends guard dex`() {
+        val out = File(tmp, "guarded.apk")
+
+        val guardEntry = ApkRepackager.injectGuard(
+            input = fakeApk(),
+            output = out,
+            patchedManifest = "GUARDED-MANIFEST".toByteArray(),
+            guardDex = "GUARD-DEX".toByteArray(),
+        )
+
+        assertEquals("classes2.dex", guardEntry)
+        assertEquals("dex0", String(read(out, "classes.dex")))
+        assertEquals("GUARD-DEX", String(read(out, "classes2.dex")))
+        assertEquals("GUARDED-MANIFEST", String(read(out, "AndroidManifest.xml")))
+        assertFalse(names(out).any { it.startsWith("META-INF/") })
     }
 
     // Absolute offset where an entry's data begins (reads the local file header's name+extra lengths).

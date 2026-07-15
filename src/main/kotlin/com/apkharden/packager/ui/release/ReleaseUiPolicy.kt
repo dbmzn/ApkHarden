@@ -5,7 +5,6 @@ import com.apkharden.release.model.ReleaseStatus
 internal data class ReleaseFormValues(
     val onlineApk: String = "",
     val candidateApk: String = "",
-    val metadata: String = "",
     val keystore: String = "",
     val outputDirectory: String = "",
     val alias: String = "",
@@ -26,7 +25,6 @@ internal data class ReleaseFormValues(
     private fun commonInputsPresent(): Boolean =
         onlineApk.isNotBlank() &&
             candidateApk.isNotBlank() &&
-            metadata.isNotBlank() &&
             keystore.isNotBlank() &&
             alias.isNotBlank()
 

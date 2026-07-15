@@ -140,11 +140,20 @@ data class SmokeTarget(
     val workerProbeUri: String? = null,
 )
 
+data class DataPreservationTarget(
+    val oldApk: String,
+    val newApk: String,
+    val packageName: String,
+    val activity: String,
+    val dataProbeUri: String,
+)
+
 data class SmokeResult(
     val passed: Boolean,
     val processIds: Set<String> = emptySet(),
     val anrDetected: Boolean = false,
     val restartLoopDetected: Boolean = false,
+    val dataPreserved: Boolean = false,
     val diagnostics: String = "",
 )
 
@@ -166,6 +175,10 @@ class AdbClient(
     fun install(apk: String) {
         val result = execute("install", "-r", apk).requireSuccess("adb install")
         check("Success" in result.stdout) { "adb install did not report success: ${result.stdout}" }
+    }
+
+    fun uninstall(packageName: String) {
+        execute("uninstall", packageName).requireSuccess("adb uninstall $packageName")
     }
 
     fun clearLogcat() {
@@ -192,13 +205,13 @@ class AdbClient(
         return result
     }
 
-    fun call(uri: String): CommandResult = shell(
+    fun call(uri: String, method: String = "probe"): CommandResult = shell(
         "content",
         "call",
         "--uri",
         uri,
         "--method",
-        "probe",
+        method,
     ).requireSuccess("content call $uri")
 
     fun pidOf(processName: String): Set<String> = shell("pidof", processName).stdout
@@ -239,6 +252,29 @@ class RuntimeSmokeRunner(
     private val adb: AdbClient,
     private val wait: (Long) -> Unit = Thread::sleep,
 ) {
+    fun verifyDataPreserved(target: DataPreservationTarget): SmokeResult {
+        runCatching { adb.uninstall(target.packageName) }
+        adb.install(target.oldApk)
+        adb.clearLogcat()
+        adb.forceStop(target.packageName)
+        adb.start(target.packageName, target.activity, debug = false)
+        wait(START_SETTLE_MILLIS)
+        adb.call(target.dataProbeUri, method = "write-data")
+        adb.forceStop(target.packageName)
+        adb.install(target.newApk)
+        adb.start(target.packageName, target.activity, debug = false)
+        wait(START_SETTLE_MILLIS)
+        val read = adb.call(target.dataProbeUri, method = "read-data")
+        val logs = adb.logcat()
+        val preserved = "preserved-marker" in read.stdout
+        return SmokeResult(
+            passed = preserved && !hasAnr(logs),
+            dataPreserved = preserved,
+            anrDetected = hasAnr(logs),
+            diagnostics = logs + "\nData probe: " + read.stdout,
+        )
+    }
+
     fun verifySurvives(target: SmokeTarget): SmokeResult {
         adb.install(target.apk)
         adb.clearLogcat()
@@ -326,6 +362,10 @@ fun main(arguments: Array<String>) {
             mode,
             RuntimeSmokeRunner(adb).verifySurvives(options.smokeTarget()),
         )
+        "preserves" -> report(
+            mode,
+            RuntimeSmokeRunner(adb).verifyDataPreserved(options.dataPreservationTarget()),
+        )
         "terminates" -> report(
             mode,
             RuntimeSmokeRunner(adb).verifyTerminates(
@@ -340,7 +380,7 @@ fun main(arguments: Array<String>) {
 private fun report(mode: String, result: SmokeResult) {
     val summary = "SmokeResult(mode=$mode, passed=${result.passed}, " +
         "processIds=${result.processIds}, anrDetected=${result.anrDetected}, " +
-        "restartLoopDetected=${result.restartLoopDetected})"
+        "restartLoopDetected=${result.restartLoopDetected}, dataPreserved=${result.dataPreserved})"
     check(result.passed) { "$summary\n${result.diagnostics}" }
     println(summary)
 }
@@ -364,4 +404,12 @@ private fun Map<String, String>.smokeTarget(): SmokeTarget = SmokeTarget(
     activity = getValue("activity"),
     mainProbeUri = get("main-probe-uri"),
     workerProbeUri = get("worker-probe-uri"),
+)
+
+private fun Map<String, String>.dataPreservationTarget(): DataPreservationTarget = DataPreservationTarget(
+    oldApk = File(getValue("old-apk")).absolutePath,
+    newApk = File(getValue("new-apk")).absolutePath,
+    packageName = getValue("package"),
+    activity = getValue("activity"),
+    dataProbeUri = getValue("data-probe-uri"),
 )

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.ui.harden.HardenScreen
+import com.apkharden.packager.ui.device.DeviceScreen
 import com.apkharden.packager.ui.release.ReleaseScreen
 import com.apkharden.packager.ui.scan.ScanScreen
 import com.apkharden.packager.ui.theme.AppTheme
@@ -28,14 +30,19 @@ import com.apkharden.packager.ui.tool.Tool
 
 private val tools: List<Tool> = listOf(
     object : Tool {
-        override val id = "release"; override val title = "生产发布"
+        override val id = "harden"; override val title = "APK加固"
+        override val icon = Icons.Default.Lock
+        @Composable override fun Content() = HardenScreen()
+    },
+    object : Tool {
+        override val id = "release"; override val title = "生产校验"
         override val icon = Icons.Default.CheckCircle
         @Composable override fun Content() = ReleaseScreen()
     },
     object : Tool {
-        override val id = "harden"; override val title = "实验加固"
-        override val icon = Icons.Default.Lock
-        @Composable override fun Content() = HardenScreen()
+        override val id = "device"; override val title = "真机验证"
+        override val icon = Icons.Default.Info
+        @Composable override fun Content() = DeviceScreen()
     },
     object : Tool {
         override val id = "scan"; override val title = "隐私扫描"

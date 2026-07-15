@@ -27,7 +27,6 @@ class ReleaseUiPolicyTest {
     private fun complete() = ReleaseFormValues(
         onlineApk = "online.apk",
         candidateApk = "candidate.apk",
-        metadata = "metadata.json",
         keystore = "release.jks",
         outputDirectory = "release",
         alias = "release",

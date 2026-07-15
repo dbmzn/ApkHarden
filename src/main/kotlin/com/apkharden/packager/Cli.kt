@@ -1,6 +1,6 @@
 package com.apkharden.packager
 
-import com.apkharden.packager.core.HardenPipeline
+import com.apkharden.packager.core.ProductionHardenPipeline
 import java.io.File
 
 /**
@@ -13,7 +13,7 @@ fun main(args: Array<String>) {
     val m = parseArgs(args)
     fun req(k: String): String = m[k] ?: error("Missing required --$k")
 
-    HardenPipeline.harden(
+    ProductionHardenPipeline.harden(
         input = File(req("input")),
         output = File(req("output")),
         keystore = File(req("keystore")),

@@ -9,6 +9,8 @@ requires `--serial`.
 - `profile`: prints API level, ABI list, and page size.
 - `survives`: installs an APK, launches it, optionally calls main/worker probe
   providers, and requires the expected processes to remain alive without ANR.
+- `preserves`: clean-installs an old APK, writes a private-data marker, updates
+  with `adb install -r`, and requires the marker to remain after relaunch.
 - `terminates`: installs an APK, launches it, and requires the process to exit
   without ANR or a restart loop.
 
@@ -29,6 +31,10 @@ the runtime terminates the process.
 
 ```powershell
 .\gradlew.bat :harden-device-tests:run --args="--adb C:/AndroidSdk/platform-tools/adb.exe --serial DEVICE_SERIAL --mode terminates --debug true --apk C:/path/app-debug.apk --package com.example.app --activity .MainActivity"
+```
+
+```powershell
+.\gradlew.bat :harden-device-tests:run --args="--adb C:/AndroidSdk/platform-tools/adb.exe --serial DEVICE_SERIAL --mode preserves --old-apk C:/path/app-old.apk --new-apk C:/path/app-new.apk --package com.example.app --activity .MainActivity --data-probe-uri content://com.example.app.main-probe"
 ```
 
 For the wrong-signer case, build the fixture with certificate A embedded in

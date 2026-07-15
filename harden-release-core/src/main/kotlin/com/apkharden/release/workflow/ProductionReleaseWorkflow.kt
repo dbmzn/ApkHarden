@@ -53,8 +53,11 @@ object ProductionReleaseWorkflow {
             )
         }
 
-        val metadata = HardenMetadataReader.read(request.metadataFile)
-        val variant = metadata.variantName.safeFileComponent("variant")
+        val variant = request.metadataFile
+            ?.let(HardenMetadataReader::read)
+            ?.variantName
+            ?.safeFileComponent("variant")
+            ?: "apk"
         val versionCode = requireNotNull(preSignAssessment.candidate).versionCode
         val releaseName = "release-$variant-v$versionCode"
         val root = outputRoot.absoluteFile

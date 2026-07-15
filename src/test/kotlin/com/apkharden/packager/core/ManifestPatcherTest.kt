@@ -9,6 +9,7 @@ class ManifestPatcherTest {
     private fun baseManifest(appName: String?): ByteArray {
         val m = AndroidManifestBlock()
         m.packageName = "com.example.demo"
+        m.getOrCreateApplicationElement()
         if (appName != null) m.applicationClassName = appName
         m.refreshFull()
         return m.bytes
@@ -27,17 +28,29 @@ class ManifestPatcherTest {
     }
 
     @Test
-    fun `patch sets proxy and adds meta-data`() {
-        val patched = ManifestPatcher.patch(
-            manifestBytes = baseManifest("com.example.demo.MyApp"),
-            originalAppClass = "com.example.demo.MyApp",
-            sigHash = "abc123",
-            dexCount = 2,
-        )
-        assertEquals(Constants.PROXY_APPLICATION, ManifestPatcher.readApplicationClass(patched))
-        val md = ManifestPatcher.readMetaData(patched)
-        assertEquals("com.example.demo.MyApp", md[Constants.META_APP_NAME])
-        assertEquals("abc123", md[Constants.META_SIG_HASH])
-        assertEquals("2", md[Constants.META_DEX_COUNT])
+    fun `static guard preserves application and covers main and explicit processes`() {
+        val manifest = AndroidManifestBlock().apply {
+            packageName = "com.example.demo"
+            applicationClassName = "com.example.demo.MyApp"
+            getOrCreateApplicationElement().newElement("service").apply {
+                getOrCreateAndroidAttribute("process", 0x01010011).valueAsString = ":remote"
+            }
+            refreshFull()
+        }.bytes
+
+        val patched = ManifestPatcher.patchGuard(manifest, "ab".repeat(32))
+
+        assertEquals("com.example.demo.MyApp", ManifestPatcher.readApplicationClass(patched))
+        assertEquals("ab".repeat(32), ManifestPatcher.readMetaData(patched)[Constants.META_SIG_HASH])
+        assertEquals(setOf("", ":remote"), ManifestPatcher.guardProcesses(patched))
+    }
+
+    @Test
+    fun `static guard rejects an already protected APK`() {
+        val once = ManifestPatcher.patchGuard(baseManifest(null), "ab".repeat(32))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            ManifestPatcher.patchGuard(once, "ab".repeat(32))
+        }
     }
 }

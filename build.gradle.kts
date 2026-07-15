@@ -2,8 +2,6 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
     kotlin("jvm") version "2.1.0"
-    kotlin("android") version "2.1.0" apply false
-    id("com.android.library") version "8.5.1" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.0"
     id("org.jetbrains.compose") version "1.7.3"
@@ -29,6 +27,7 @@ val lwjglNatives = System.getProperty("os.name").lowercase().let { os ->
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(project(":harden-release-core"))
+    implementation(project(":harden-device-tests"))
     implementation("com.android.tools.build:apksig:8.3.2")
     implementation("io.github.reandroid:ARSCLib:1.3.8")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

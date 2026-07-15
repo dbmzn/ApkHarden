@@ -4,7 +4,6 @@ import java.io.File
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -20,79 +19,78 @@ object ApkRepackager {
     // this record and preserves our alignment) honour. Without this, ZipOutputStream places
     // STORED entries at arbitrary offsets → INSTALL_FAILED_INVALID_APK "Failed to extract
     // native libraries".
-    private const val PAGE_ALIGNMENT = 4096
+    private const val PAGE_ALIGNMENT = 16384
     private const val DEFAULT_STORED_ALIGNMENT = 4
     private const val ALIGN_EXTRA_HEADER_ID = 0xd935.toShort()
     private const val ALIGN_EXTRA_MIN_SIZE = 6 // 2 (id) + 2 (size) + 2 (alignment value)
 
-    fun repackage(
+    /** Appends a statically loaded guard dex while preserving every business dex in place. */
+    fun injectGuard(
         input: File,
         output: File,
         patchedManifest: ByteArray,
-        shellDex: ByteArray,
-        encryptedDexes: List<ByteArray>,
-    ) {
+        guardDex: ByteArray,
+    ): String {
+        var injectedDexName = ""
         ZipFile(input).use { zin ->
+            val dexNames = zin.entries().asSequence()
+                .map { it.name }
+                .filter { it.matches(dexRegex) }
+                .toList()
+            require(dexNames.isNotEmpty()) { "APK contains no classes.dex" }
+            val nextDexIndex = dexNames.maxOf(::dexIndex) + 1
+            val guardDexName = if (nextDexIndex == 1) "classes.dex" else "classes$nextDexIndex.dex"
+            injectedDexName = guardDexName
+
             output.outputStream().buffered().use { raw ->
                 val counting = CountingOutputStream(raw)
                 ZipOutputStream(counting).use { zout ->
-                    // 1. Copy originals except dex, manifest, and old signatures.
-                    for (e in zin.entries()) {
-                        val name = e.name
-                        if (name.matches(dexRegex)) continue
+                    for (entry in zin.entries()) {
+                        val name = entry.name
                         if (name == "AndroidManifest.xml") continue
-                        if (name.startsWith("META-INF/") &&
-                            (name.endsWith(".RSA") || name.endsWith(".DSA") ||
-                             name.endsWith(".EC") || name.endsWith(".SF") ||
-                             name == "META-INF/MANIFEST.MF")
-                        ) continue
-
-                        // Preserve the original compression method. STORED entries (resources.arsc,
-                        // native libs on extractNativeLibs=false) must stay uncompressed and aligned.
-                        val copy = ZipEntry(name)
-                        if (e.method == ZipEntry.STORED) {
-                            copy.method = ZipEntry.STORED
-                            copy.size = e.size
-                            copy.compressedSize = e.size
-                            copy.crc = e.crc
-                            alignStored(copy, name, counting.count)
-                        } else {
-                            copy.method = ZipEntry.DEFLATED
-                        }
-                        zout.putNextEntry(copy)
-                        zin.getInputStream(e).use { it.copyTo(zout) }
-                        zout.closeEntry()
+                        if (isSignatureEntry(name)) continue
+                        copyEntry(zin, entry, zout, counting.count)
                     }
-                    // 2. Patched manifest (compressed; not mmap'd, no alignment needed).
                     write(zout, "AndroidManifest.xml", patchedManifest)
-                    // 3. Shell becomes classes.dex (compressed).
-                    write(zout, "classes.dex", shellDex)
-                    // 4. Encrypted original dexes as assets. These are already deflate+AES'd
-                    //    (high-entropy, incompressible), so store them uncompressed to avoid
-                    //    wasting CPU and the small deflate overhead.
-                    encryptedDexes.forEachIndexed { i, bytes ->
-                        writeStored(zout, Constants.encryptedDexEntry(i), bytes, counting.count)
-                    }
+                    write(zout, guardDexName, guardDex)
                 }
             }
         }
+        return injectedDexName
+    }
+
+    private fun dexIndex(name: String): Int =
+        if (name == "classes.dex") 1
+        else name.removePrefix("classes").removeSuffix(".dex").toInt()
+
+    private fun isSignatureEntry(name: String): Boolean =
+        name.startsWith("META-INF/") &&
+            (name.endsWith(".RSA") || name.endsWith(".DSA") || name.endsWith(".EC") ||
+                name.endsWith(".SF") || name == "META-INF/MANIFEST.MF")
+
+    private fun copyEntry(
+        input: ZipFile,
+        source: ZipEntry,
+        output: ZipOutputStream,
+        offset: Long,
+    ) {
+        val copy = ZipEntry(source.name)
+        if (source.method == ZipEntry.STORED) {
+            copy.method = ZipEntry.STORED
+            copy.size = source.size
+            copy.compressedSize = source.size
+            copy.crc = source.crc
+            alignStored(copy, source.name, offset)
+        } else {
+            copy.method = ZipEntry.DEFLATED
+        }
+        output.putNextEntry(copy)
+        input.getInputStream(source).use { it.copyTo(output) }
+        output.closeEntry()
     }
 
     private fun write(zout: ZipOutputStream, name: String, bytes: ByteArray) {
         zout.putNextEntry(ZipEntry(name))
-        zout.write(bytes)
-        zout.closeEntry()
-    }
-
-    private fun writeStored(zout: ZipOutputStream, name: String, bytes: ByteArray, lfhOffset: Long) {
-        val e = ZipEntry(name).apply {
-            method = ZipEntry.STORED
-            size = bytes.size.toLong()
-            compressedSize = bytes.size.toLong()
-            crc = CRC32().apply { update(bytes) }.value
-        }
-        alignStored(e, name, lfhOffset)
-        zout.putNextEntry(e)
         zout.write(bytes)
         zout.closeEntry()
     }

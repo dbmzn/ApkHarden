@@ -66,7 +66,6 @@ fun ReleaseScreen() {
     val inputFingerprint = listOf(
         form.onlineApk,
         form.candidateApk,
-        form.metadata,
         form.keystore,
         form.alias,
     )
@@ -106,9 +105,6 @@ fun ReleaseScreen() {
                 }
                 FileField("候选 APK", form.candidateApk, { form = form.copy(candidateApk = it) }) {
                     pickFile("APK 文件", extensions = listOf("apk"))?.let { form = form.copy(candidateApk = it) }
-                }
-                FileField("harden-metadata.json", form.metadata, { form = form.copy(metadata = it) }) {
-                    pickFile("JSON 文件", extensions = listOf("json"))?.let { form = form.copy(metadata = it) }
                 }
                 FileField("正式 Keystore", form.keystore, { form = form.copy(keystore = it) }) {
                     pickFile("Keystore", extensions = listOf("jks", "keystore", "p12"))?.let {
@@ -298,7 +294,6 @@ private fun ReleaseFormValues.request(
 ): ReleaseRequest = ReleaseRequest(
     onlineApk = File(onlineApk),
     candidateApk = File(candidateApk),
-    metadataFile = File(metadata),
     keystore = KeystoreRequest(File(keystore), storePassword, alias, keyPassword),
     approvedFindingCodes = approvals,
 )

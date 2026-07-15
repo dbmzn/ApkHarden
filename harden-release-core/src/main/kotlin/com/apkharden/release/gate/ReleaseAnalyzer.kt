@@ -14,7 +14,7 @@ object ReleaseAnalyzer {
     fun analyze(request: ReleaseRequest): ReleaseAssessment {
         val online = ApkIdentityReader.read(request.onlineApk)
         val candidate = ApkIdentityReader.read(request.candidateApk)
-        val metadata = HardenMetadataReader.read(request.metadataFile)
+        val metadata = request.metadataFile?.let(HardenMetadataReader::read)
         val keystore = KeystoreReader.load(request.keystore)
         val findings = ReleaseGateEvaluator.evaluate(
             online,
