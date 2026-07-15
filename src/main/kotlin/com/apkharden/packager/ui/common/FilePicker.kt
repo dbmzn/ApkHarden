@@ -12,7 +12,7 @@ import org.lwjgl.util.nfd.NativeFileDialog.NFD_SaveDialog
 
 /**
  * OS 原生文件对话框（Windows 上是现代 IFileOpenDialog，含快速访问栏），LWJGL NFD 驱动。
- * 加固与隐私扫描共用。返回所选路径，取消则 null。
+ * 打开系统文件选择器并返回所选路径，取消则返回 null。
  */
 fun pickFile(
     filterName: String? = null,

@@ -1,8 +1,5 @@
 package com.apkharden.packager.core
 
-import com.apkharden.release.apk.ApkDigest
-import com.apkharden.release.apk.ApkIdentityReader
-import com.apkharden.release.apk.ApkSignatureReader
 import java.io.File
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -50,7 +47,7 @@ object ProductionHardenPipeline {
         val certificateSha256 = KeystoreUtil.expectedSigHash(credentials)
 
         log("读取 APK 并执行兼容性预检…")
-        val identity = ApkIdentityReader.read(input)
+        val identity = ApkInspector.inspect(input)
         require(identity.minSdk >= 23) { "APK minSdk ${identity.minSdk} is below supported API 23" }
         require(identity.splitName == null) { "Split APK is not supported: ${identity.splitName}" }
         require(!identity.testOnly) { "testOnly APK cannot be hardened for release" }
@@ -70,12 +67,6 @@ object ProductionHardenPipeline {
             val dexes = reader.dexNames()
             require(dexes.isNotEmpty()) { "APK contains no classes.dex" }
             val manifest = reader.manifestBytes()
-            HardenLinter.lint(
-                reader.entryNames(),
-                manifest,
-                dexes.map(reader::read),
-                log,
-            )
             require(ManifestPatcher.readApplicationClass(manifest) != LEGACY_PROXY_APPLICATION) {
                 "Legacy whole-DEX hardened APK cannot be hardened again; use the original APK"
             }
@@ -97,7 +88,7 @@ object ProductionHardenPipeline {
             log("执行 16KB 对齐并使用 V1+V2+V3 正式签名…")
             ApkSignerWrapper.sign(unsigned, signed, credentials)
             check(ApkSignerWrapper.verify(signed)) { "Output APK failed signature verification" }
-            val signer = ApkSignatureReader.read(signed)
+            val signer = ApkInspector.signature(signed)
             check(signer.signerSha256.singleOrNull() == certificateSha256) {
                 "Output APK signer does not match the selected keystore"
             }
@@ -129,8 +120,8 @@ object ProductionHardenPipeline {
         val report = ProductionHardenReport(
             inputFile = input.absolutePath,
             outputFile = outputFile.absolutePath,
-            inputSha256 = ApkDigest.sha256(input),
-            outputSha256 = ApkDigest.sha256(outputFile),
+            inputSha256 = ApkInspector.sha256(input),
+            outputSha256 = ApkInspector.sha256(outputFile),
             packageName = identity.packageName,
             versionCode = identity.versionCode,
             minSdk = identity.minSdk,

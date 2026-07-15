@@ -12,10 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.ProductionHardenPipeline
+import com.apkharden.packager.signing.SigningProfile
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.theme.LocalSemantic
 import kotlinx.coroutines.Dispatchers
@@ -24,14 +23,12 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
-fun HardenScreen() {
+fun HardenScreen(
+    signingProfile: SigningProfile?,
+    onConfigureSigning: () -> Unit,
+) {
     var inputApk by remember { mutableStateOf("") }
     var outputApk by remember { mutableStateOf("") }
-    var keystore by remember { mutableStateOf("") }
-    var alias by remember { mutableStateOf("") }
-    var storePass by remember { mutableStateOf("") }
-    var keyPass by remember { mutableStateOf("") }
-    var showPasswords by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
     val logs = remember { mutableStateListOf<String>() }
     val scope = rememberCoroutineScope()
@@ -71,23 +68,12 @@ fun HardenScreen() {
             fileRow("输出 APK", outputApk, { outputApk = it }) {
                 pickFile("APK 文件", save = true, extensions = listOf("apk"))?.let { outputApk = it }
             }
-            fileRow("Keystore", keystore, { keystore = it }) {
-                pickFile("Keystore", extensions = listOf("jks", "keystore", "p12", "bks"))?.let { keystore = it }
-            }
-
-            field("别名 alias", alias) { alias = it }
-            passwordField("keystore 密码", storePass, showPasswords) { storePass = it }
-            passwordField("key 密码", keyPass, showPasswords) { keyPass = it }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = showPasswords, onCheckedChange = { showPasswords = it })
-                Text("显示密码", style = MaterialTheme.typography.body2)
-            }
+            SigningProfileCard(profile = signingProfile, onConfigure = onConfigureSigning)
         }
 
         Button(
             enabled = !running && inputApk.isNotBlank() && outputApk.isNotBlank() &&
-                keystore.isNotBlank() && alias.isNotBlank() &&
-                storePass.isNotEmpty() && keyPass.isNotEmpty(),
+                signingProfile != null && File(signingProfile.keystorePath).isFile,
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             shape = RoundedCornerShape(10.dp),
             elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
@@ -98,7 +84,10 @@ fun HardenScreen() {
                         withContext(Dispatchers.IO) {
                             ProductionHardenPipeline.harden(
                                 input = File(inputApk), output = File(outputApk),
-                                keystore = File(keystore), storePass = storePass, alias = alias, keyPass = keyPass,
+                                keystore = File(signingProfile!!.keystorePath),
+                                storePass = signingProfile.storePassword,
+                                alias = signingProfile.alias,
+                                keyPass = signingProfile.keyPassword,
                                 log = { line -> scope.launch { logs.add(line) } },
                             )
                         }
@@ -140,34 +129,55 @@ fun HardenScreen() {
 }
 
 @Composable
+private fun SigningProfileCard(profile: SigningProfile?, onConfigure: () -> Unit) {
+    val sem = LocalSemantic.current
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(sem.cardBg)
+            .border(1.dp, sem.cardBorder, RoundedCornerShape(10.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("签名配置", style = MaterialTheme.typography.subtitle2, color = MaterialTheme.colors.onSurface)
+            if (profile == null) {
+                Text("尚未配置，请先在签名工具中保存正式签名", style = MaterialTheme.typography.body2,
+                    color = MaterialTheme.colors.error)
+            } else {
+                Text(
+                    "${File(profile.keystorePath).name}  ·  alias: ${profile.alias}",
+                    style = MaterialTheme.typography.body2,
+                    color = sem.subtle,
+                )
+                if (!File(profile.keystorePath).isFile) {
+                    Text("签名文件不存在，请重新配置", style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.error)
+                }
+            }
+        }
+        OutlinedButton(onClick = onConfigure, shape = RoundedCornerShape(10.dp)) {
+            Text(if (profile == null) "去配置" else "修改")
+        }
+    }
+}
+
+@Composable
 private fun fileRow(label: String, value: String, onChange: (String) -> Unit, onPick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true,
-            modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp))
+            modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), colors = hardenFieldColors())
         OutlinedButton(onClick = onPick, shape = RoundedCornerShape(10.dp)) { Text("浏览") }
     }
 }
 
 @Composable
-private fun field(label: String, value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true,
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
-}
-
-@Composable
-private fun passwordField(
-    label: String,
-    value: String,
-    visible: Boolean,
-    onChange: (String) -> Unit,
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        label = { Text(label) },
-        singleLine = true,
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-    )
-}
+private fun hardenFieldColors() = TextFieldDefaults.outlinedTextFieldColors(
+    textColor = MaterialTheme.colors.onSurface,
+    cursorColor = MaterialTheme.colors.primary,
+    focusedBorderColor = MaterialTheme.colors.primary,
+    unfocusedBorderColor = LocalSemantic.current.subtle,
+    focusedLabelColor = MaterialTheme.colors.primary,
+    unfocusedLabelColor = LocalSemantic.current.subtle,
+)
