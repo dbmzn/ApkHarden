@@ -39,7 +39,7 @@ but is explicitly labeled experimental and cannot produce a production status.
 
 - [x] Rename the existing navigation item to make its experimental status obvious.
 - [x] Display `实验模式，不允许用于正式发布` in the whole-DEX screen.
-- [ ] Keep the existing hardening and privacy-scanner behavior working.
+- [x] Keep the existing hardening and privacy-scanner behavior working.
 
 ## Task 5: Verify Phase 4
 
