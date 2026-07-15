@@ -11,10 +11,10 @@ but is explicitly labeled experimental and cannot produce a production status.
 
 ## Task 1: Add deterministic release artifacts
 
-- [ ] Render every assessment field and finding to deterministic HTML.
-- [ ] Export the signer leaf certificate as PEM.
-- [ ] Generate sorted SHA-256 checksums for every release artifact.
-- [ ] Escape all untrusted report content and never include passwords or keys.
+- [x] Render every assessment field and finding to deterministic HTML.
+- [x] Export the signer leaf certificate as PEM.
+- [x] Generate sorted SHA-256 checksums for every release artifact.
+- [x] Escape all untrusted report content and never include passwords or keys.
 
 ## Task 2: Add the statically gated release workflow
 
