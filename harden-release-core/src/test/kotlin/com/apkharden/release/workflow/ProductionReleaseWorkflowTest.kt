@@ -1,6 +1,10 @@
 package com.apkharden.release.workflow
 
 import com.apkharden.release.apk.ApkSignatureReader
+import com.apkharden.release.apk.ApkDigest
+import com.apkharden.release.device.DeviceScenario
+import com.apkharden.release.device.DeviceTestResult
+import com.apkharden.release.device.DeviceVerificationReportCodec
 import com.apkharden.release.fixture.TestApkFactory
 import com.apkharden.release.model.ReleaseRequest
 import com.apkharden.release.model.ReleaseStatus
@@ -65,7 +69,7 @@ class ProductionReleaseWorkflowTest {
         }
 
         assertTrue(error.assessment.findings.any { it.code == "VERSION_NOT_INCREMENTED" })
-        assertFalse(output.exists())
+        assertTrue(output.listFiles().orEmpty().none { it.name.startsWith("release-") })
     }
 
     @Test
@@ -78,6 +82,30 @@ class ProductionReleaseWorkflowTest {
         assertEquals(first.jsonReport.readText(), second.jsonReport.readText())
         assertEquals(first.htmlReport.readText(), second.htmlReport.readText())
         assertEquals(first.certificatePem.readText(), second.certificatePem.readText())
+    }
+
+    @Test
+    fun `device report bound to another APK is rejected`() {
+        val request = validRequest()
+        val output = File(temp, "mismatch")
+        val digest = "00".repeat(32)
+        val reportFile = File(temp, "device-results.json")
+        DeviceVerificationReportCodec.write(
+            "com.example.app",
+            11,
+            digest,
+            DeviceScenario.entries.map { scenario ->
+                DeviceTestResult(scenario, true, 36, if (scenario == DeviceScenario.API_36_16K_SURVIVES) 16384 else 4096, listOf("arm64-v8a"), "com.example.app", 11, digest)
+            },
+            reportFile,
+        )
+
+        val error = assertThrows(ReleaseBlockedException::class.java) {
+            ProductionReleaseWorkflow.export(request, output, reportFile)
+        }
+
+        assertTrue(error.assessment.findings.any { it.code == "DEVICE_APK_MISMATCH" })
+        assertTrue(output.listFiles().orEmpty().none { it.name.startsWith("release-") })
     }
 
     private fun validRequest(): ReleaseRequest {

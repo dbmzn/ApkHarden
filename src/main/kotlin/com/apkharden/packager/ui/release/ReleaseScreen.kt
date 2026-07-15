@@ -60,6 +60,7 @@ fun ReleaseScreen() {
     var running by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var bundlePath by remember { mutableStateOf<String?>(null) }
+    var deviceReport by remember { mutableStateOf("") }
     var showPasswords by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val inputFingerprint = listOf(
@@ -74,6 +75,7 @@ fun ReleaseScreen() {
         assessment = null
         approvals.clear()
         bundlePath = null
+        deviceReport = ""
         errorText = null
     }
 
@@ -209,6 +211,38 @@ fun ReleaseScreen() {
                         Spacer(Modifier.width(7.dp))
                         Text("签名并导出")
                     }
+                }
+                FileField("设备结果 JSON", deviceReport, { deviceReport = it }) {
+                    pickFile("设备结果 JSON", extensions = listOf("json"))?.let { deviceReport = it }
+                }
+                OutlinedButton(
+                    enabled = !running && bundlePath != null && deviceReport.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        val bundle = bundlePath?.let(::File) ?: return@OutlinedButton
+                        running = true
+                        errorText = null
+                        scope.launch {
+                            try {
+                                val qualified = withContext(Dispatchers.IO) {
+                                    ProductionReleaseWorkflow.qualify(bundle, File(deviceReport))
+                                }
+                                assessment = qualified.assessment
+                                bundlePath = qualified.directory.absolutePath
+                            } catch (blocked: ReleaseBlockedException) {
+                                assessment = blocked.assessment
+                                errorText = blocked.message
+                            } catch (error: Throwable) {
+                                errorText = error.message ?: error.javaClass.simpleName
+                            } finally {
+                                running = false
+                            }
+                        }
+                    },
+                ) {
+                    Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text("导入设备结果并确认资格")
                 }
                 if (running) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -108,7 +108,7 @@ Definition of done:
 
 ## Phase 5: Device Verification and Release Qualification
 
-Phase-boundary plan target: `docs/superpowers/plans/2026-07-13-device-release-qualification.md` (write after desktop integration exposes the final release model).
+Phase-boundary plan target: `docs/superpowers/plans/2026-07-15-device-release-qualification.md`.
 
 Produces:
 
