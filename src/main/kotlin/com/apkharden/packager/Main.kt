@@ -18,7 +18,7 @@ fun main() {
             title = "ApkHarden",
             // Open centered on the screen instead of the platform default (top-left / cascading).
             state = rememberWindowState(
-                width = 880.dp, height = 680.dp,
+                width = 1180.dp, height = 760.dp,
                 position = WindowPosition(Alignment.Center),
             ),
         ) {

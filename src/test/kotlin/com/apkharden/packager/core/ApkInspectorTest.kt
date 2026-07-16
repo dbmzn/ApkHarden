@@ -54,6 +54,8 @@ class ApkInspectorTest {
         assertEquals(36, value.targetSdk)
         assertEquals("config.arm64_v8a", value.splitName)
         assertEquals(setOf("arm64-v8a"), value.abis)
+        assertTrue(value.permissions.isEmpty())
+        assertTrue(value.exportedComponents.isEmpty())
         assertTrue(value.testOnly)
         assertFalse(value.debuggable)
         assertFalse(value.signature.verified)

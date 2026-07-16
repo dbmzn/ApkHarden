@@ -11,6 +11,7 @@ internal data class ApkSignatureInfo(
     val signerSha256: Set<String>,
     val signerCount: Int,
     val hasSigningLineage: Boolean,
+    val schemes: Set<String>,
 )
 
 internal data class ApkInfo(
@@ -22,12 +23,15 @@ internal data class ApkInfo(
     val testOnly: Boolean,
     val splitName: String?,
     val abis: Set<String>,
+    val permissions: Set<String>,
+    val exportedComponents: Set<String>,
     val signature: ApkSignatureInfo,
 )
 
 internal object ApkInspector {
     private const val ATTR_TEST_ONLY = 0x01010272
     private const val ATTR_VERSION_CODE_MAJOR = 0x01010576
+    private const val ATTR_EXPORTED = 0x01010010
     private val nativeEntry = Regex("lib/([^/]+)/[^/]+\\.so")
 
     fun inspect(apk: File): ApkInfo {
@@ -49,6 +53,15 @@ internal object ApkInspector {
                 abis = zip.entries().asSequence()
                     .mapNotNull { nativeEntry.matchEntire(it.name)?.groupValues?.get(1) }
                     .toSortedSet(),
+                permissions = manifest.usesPermissions.toSortedSet(),
+                exportedComponents = listOf("activity", "activity-alias", "service", "receiver", "provider")
+                    .flatMap { tag ->
+                        manifest.listApplicationElementsByTag(tag).mapNotNull { element ->
+                            if (element.searchAttributeByResourceId(ATTR_EXPORTED)?.valueAsBoolean == true) {
+                                "$tag:${AndroidManifestBlock.getAndroidNameValue(element).orEmpty()}"
+                            } else null
+                        }
+                    }.toSortedSet(),
                 signature = signature(apk),
             )
         }
@@ -63,6 +76,12 @@ internal object ApkInspector {
             signerSha256 = certificates.map { certificateSha256(it.encoded) }.toSet(),
             signerCount = certificates.size,
             hasSigningLineage = result.signingCertificateLineage != null,
+            schemes = buildSet {
+                if (result.isVerifiedUsingV1Scheme) add("V1")
+                if (result.isVerifiedUsingV2Scheme) add("V2")
+                if (result.isVerifiedUsingV3Scheme || result.isVerifiedUsingV31Scheme) add("V3")
+                if (result.isVerifiedUsingV4Scheme) add("V4")
+            },
         )
     }
 

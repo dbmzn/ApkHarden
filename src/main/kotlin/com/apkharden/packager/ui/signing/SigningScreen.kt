@@ -41,12 +41,12 @@ fun SigningScreen(
     val sem = LocalSemantic.current
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("签名工具", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.onBackground)
+        Text("签名百宝箱", style = MaterialTheme.typography.h5, color = MaterialTheme.colors.onBackground)
         Text(
-            "集中保存正式签名，加固 APK 时自动复用，无需反复选择文件和输入密码",
+            "集中管理正式签名，查看证书指纹，并比较 APK 是否使用同一签名",
             style = MaterialTheme.typography.caption,
             color = sem.subtle,
         )
@@ -165,6 +165,7 @@ fun SigningScreen(
                 ) { Text("清除配置") }
             }
         }
+        SignatureToolbox(initialProfile)
     }
 }
 

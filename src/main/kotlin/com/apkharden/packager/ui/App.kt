@@ -1,16 +1,19 @@
 package com.apkharden.packager.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Divider
-import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,16 +21,36 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.signing.SigningProfileStore
+import com.apkharden.packager.ui.adb.AdbToolboxScreen
+import com.apkharden.packager.ui.archive.ArchiveScreen
+import com.apkharden.packager.ui.compare.CompareScreen
+import com.apkharden.packager.ui.device.DeviceScreen
 import com.apkharden.packager.ui.harden.HardenScreen
+import com.apkharden.packager.ui.inspect.InspectScreen
+import com.apkharden.packager.ui.manifest.ManifestScreen
 import com.apkharden.packager.ui.signing.SigningScreen
+import com.apkharden.packager.ui.size.SizeAnalysisScreen
 import com.apkharden.packager.ui.theme.AppTheme
 import com.apkharden.packager.ui.theme.LocalSemantic
 
-private enum class Destination(val title: String, val icon: ImageVector) {
-    HARDEN("APK 加固", Icons.Default.Lock),
-    SIGNING("签名工具", Icons.Default.Settings),
+private enum class Destination(
+    val title: String,
+    val description: String,
+    val icon: ImageVector,
+    val primary: Boolean = false,
+) {
+    HARDEN("APK 加固", "核心保护能力", Icons.Default.Lock, true),
+    INSPECT("APK 体检", "发布风险检查", Icons.Default.Search),
+    COMPARE("APK 对比", "新旧版本变化", Icons.AutoMirrored.Filled.List),
+    MANIFEST("Manifest", "组件与 Deep Link", Icons.Default.Info),
+    ARCHIVE("文件浏览", "目录与大小占比", Icons.Default.Search),
+    SIZE("包体分析", "增量来源排行", Icons.AutoMirrored.Filled.List),
+    DEVICE("设备验证", "安装与冷启动门禁", Icons.Default.PlayArrow),
+    ADB("ADB 工具箱", "调试与设备操作", Icons.Default.Settings),
+    SIGNING("签名百宝箱", "证书与签名管理", Icons.Default.Settings),
 }
 
 @Composable
@@ -35,43 +58,34 @@ fun App() {
     var dark by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf(Destination.HARDEN) }
     val signingStore = remember { SigningProfileStore() }
-    var signingProfile by remember {
-        mutableStateOf(runCatching { signingStore.load() }.getOrNull())
-    }
+    var signingProfile by remember { mutableStateOf(runCatching { signingStore.load() }.getOrNull()) }
 
     AppTheme(dark = dark) {
-        val sem = LocalSemantic.current
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colors.background,
-            contentColor = MaterialTheme.colors.onBackground,
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                TopBar(dark = dark, onToggleTheme = { dark = !dark })
-                Divider(color = sem.cardBorder)
-                Row(Modifier.fillMaxSize()) {
-                    NavRail(selected = selected, onSelect = { selected = it })
-                    Divider(color = sem.cardBorder, modifier = Modifier.fillMaxHeight().width(1.dp))
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
+            Row(Modifier.fillMaxSize()) {
+                Sidebar(selected = selected, onSelect = { selected = it })
+                Column(Modifier.fillMaxSize()) {
+                    TopBar(selected = selected, dark = dark, onToggleTheme = { dark = !dark })
+                    Divider(color = LocalSemantic.current.cardBorder)
                     Box(Modifier.fillMaxSize()) {
                         when (selected) {
                             Destination.HARDEN -> HardenScreen(
                                 signingProfile = signingProfile,
                                 onConfigureSigning = { selected = Destination.SIGNING },
                             )
+                            Destination.INSPECT -> InspectScreen()
+                            Destination.COMPARE -> CompareScreen()
+                            Destination.MANIFEST -> ManifestScreen()
+                            Destination.ARCHIVE -> ArchiveScreen()
+                            Destination.SIZE -> SizeAnalysisScreen()
+                            Destination.DEVICE -> DeviceScreen()
+                            Destination.ADB -> AdbToolboxScreen()
                             Destination.SIGNING -> SigningScreen(
                                 initialProfile = signingProfile,
                                 onSave = { profile ->
-                                    runCatching {
-                                        signingStore.save(profile)
-                                        signingProfile = profile
-                                    }
+                                    runCatching { signingStore.save(profile); signingProfile = profile }
                                 },
-                                onClear = {
-                                    runCatching {
-                                        signingStore.clear()
-                                        signingProfile = null
-                                    }
-                                },
+                                onClear = { runCatching { signingStore.clear(); signingProfile = null } },
                             )
                         }
                     }
@@ -82,77 +96,97 @@ fun App() {
 }
 
 @Composable
-private fun NavRail(selected: Destination, onSelect: (Destination) -> Unit) {
+private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit) {
+    val sem = LocalSemantic.current
     Column(
-        Modifier.fillMaxHeight().width(104.dp).padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.fillMaxHeight().width(220.dp).background(MaterialTheme.colors.surface)
+            .border(width = 0.dp, color = Color.Transparent).padding(16.dp),
     ) {
-        Destination.entries.forEach { destination ->
-            NavItem(
-                label = destination.title,
-                icon = destination.icon,
-                active = selected == destination,
-                onClick = { onSelect(destination) },
-            )
+        Row(Modifier.height(54.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(MaterialTheme.colors.primary),
+                contentAlignment = Alignment.Center,
+            ) { Text("A", color = MaterialTheme.colors.onPrimary, fontWeight = FontWeight.Bold) }
+            Spacer(Modifier.width(11.dp))
+            Column {
+                Text("ApkHarden", style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.Bold)
+                Text("Android 发布百宝箱", style = MaterialTheme.typography.caption, color = sem.subtle)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            NavSection("核心功能", listOf(Destination.HARDEN), selected, onSelect)
+            Spacer(Modifier.height(8.dp))
+            NavSection("APK 工具", listOf(Destination.INSPECT, Destination.MANIFEST, Destination.ARCHIVE,
+                Destination.COMPARE, Destination.SIZE), selected, onSelect)
+            Spacer(Modifier.height(8.dp))
+            NavSection("设备工具", listOf(Destination.DEVICE, Destination.ADB), selected, onSelect)
+            Spacer(Modifier.height(8.dp))
+            NavSection("配置", listOf(Destination.SIGNING), selected, onSelect)
+        }
+        Spacer(Modifier.height(10.dp))
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colors.primary.copy(alpha = .08f)).padding(12.dp),
+        ) {
+            Text("本地离线处理", style = MaterialTheme.typography.subtitle2, color = MaterialTheme.colors.primary)
+            Spacer(Modifier.height(3.dp))
+            Text("APK 与签名密码不会上传", style = MaterialTheme.typography.caption, color = sem.subtle)
         }
     }
 }
 
 @Composable
-private fun NavItem(label: String, icon: ImageVector, active: Boolean, onClick: () -> Unit) {
-    val accent = MaterialTheme.colors.primary
+private fun NavSection(title: String, items: List<Destination>, selected: Destination, onSelect: (Destination) -> Unit) {
+    Text(title, style = MaterialTheme.typography.caption, color = LocalSemantic.current.subtle,
+        modifier = Modifier.padding(start = 10.dp, bottom = 6.dp))
+    items.forEach { NavItem(it, selected == it, onSelect) }
+}
+
+@Composable
+private fun NavItem(destination: Destination, active: Boolean, onSelect: (Destination) -> Unit) {
     val sem = LocalSemantic.current
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 10.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (active) accent.copy(alpha = 0.14f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 11.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+    val tint = if (active) MaterialTheme.colors.primary else sem.subtle
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(if (active) MaterialTheme.colors.primary.copy(alpha = .13f) else Color.Transparent)
+            .clickable { onSelect(destination) }.padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (active) accent else sem.subtle,
-            modifier = Modifier.size(22.dp),
-        )
-        Text(label, style = MaterialTheme.typography.caption, color = if (active) accent else sem.subtle)
+        Icon(destination.icon, destination.title, tint = tint, modifier = Modifier.size(21.dp))
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(destination.title, style = MaterialTheme.typography.body2,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (active) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface)
+            Text(destination.description, style = MaterialTheme.typography.caption, color = sem.subtle)
+        }
+        if (destination.primary) {
+            Text("核心", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.primary,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colors.primary.copy(alpha = .1f)).padding(horizontal = 6.dp, vertical = 2.dp))
+        }
     }
 }
 
 @Composable
-private fun TopBar(dark: Boolean, onToggleTheme: () -> Unit) {
+private fun TopBar(selected: Destination, dark: Boolean, onToggleTheme: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 18.dp),
+        Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 28.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(MaterialTheme.colors.primary),
-            contentAlignment = Alignment.Center,
-        ) { Text("A", color = MaterialTheme.colors.onPrimary, style = MaterialTheme.typography.subtitle1) }
-        Spacer(Modifier.width(10.dp))
-        Text("ApkHarden", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.onBackground)
-        Spacer(Modifier.width(8.dp))
-        Text("Android APK 加固工具", style = MaterialTheme.typography.caption, color = LocalSemantic.current.subtle)
+        Text(selected.title, style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.SemiBold)
+        Text("  /  ${selected.description}", style = MaterialTheme.typography.caption, color = LocalSemantic.current.subtle)
         Spacer(Modifier.weight(1f))
-        ThemeToggle(dark = dark, onClick = onToggleTheme)
-    }
-}
-
-@Composable
-private fun ThemeToggle(dark: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier.clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colors.surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colors.primary))
-        Spacer(Modifier.width(7.dp))
-        Text(if (dark) "深色" else "浅色", style = MaterialTheme.typography.caption,
-            color = MaterialTheme.colors.onSurface)
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colors.surface)
+                .clickable(onClick = onToggleTheme).padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colors.primary))
+            Spacer(Modifier.width(7.dp))
+            Text(if (dark) "深色模式" else "浅色模式", style = MaterialTheme.typography.caption)
+        }
     }
 }
