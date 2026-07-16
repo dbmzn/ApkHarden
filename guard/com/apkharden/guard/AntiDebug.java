@@ -6,9 +6,9 @@ import android.os.Debug;
 import java.io.BufferedReader;
 import java.io.FileReader;
 
-final class AntiDebug {
+public final class AntiDebug {
     /** @return true if a debugger / tracer is detected. */
-    static boolean isDetected(Context ctx) {
+    public static boolean isDetected(Context ctx) {
         if (Debug.isDebuggerConnected() || Debug.waitingForDebugger()) return true;
         if ((ctx.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) return true;
         BufferedReader r = null;

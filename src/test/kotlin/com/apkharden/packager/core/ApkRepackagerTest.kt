@@ -46,11 +46,14 @@ class ApkRepackagerTest {
         }
 
         val out = File(tmp, "out.apk")
-        ApkRepackager.injectGuard(
+        ApkRepackager.wrapEncryptedDex(
             input = input,
             output = out,
             patchedManifest = "NEWMANIFEST".toByteArray(),
-            guardDex = "GUARD".toByteArray(),
+            shellDex = "SHELL".toByteArray(),
+            encryptedDexes = listOf("PAYLOAD".toByteArray()),
+            metadata = "dexCount=1".toByteArray(),
+            nativeLibraries = mapOf("x86" to ByteArray(64)),
         )
 
         assertEquals(0L, dataOffset(out, "lib/arm64-v8a/libfoo.so") % 16384,
@@ -58,41 +61,51 @@ class ApkRepackagerTest {
     }
 
     @Test
-    fun `static guard injection preserves business dex and appends guard dex`() {
-        val out = File(tmp, "guarded.apk")
+    fun `encrypted wrapping removes business dex and stores payload plus aligned shell library`() {
+        val out = File(tmp, "encrypted.apk")
+        val shellLibrary = ByteArray(12_345) { (it % 251).toByte() }
 
-        val guardEntry = ApkRepackager.injectGuard(
+        ApkRepackager.wrapEncryptedDex(
             input = fakeApk(),
             output = out,
-            patchedManifest = "GUARDED-MANIFEST".toByteArray(),
-            guardDex = "GUARD-DEX".toByteArray(),
+            patchedManifest = "SHELL-MANIFEST".toByteArray(),
+            shellDex = "SHELL-DEX".toByteArray(),
+            encryptedDexes = listOf("APH1-ENCRYPTED".toByteArray()),
+            metadata = "dexCount=1".toByteArray(),
+            nativeLibraries = mapOf("arm64-v8a" to shellLibrary),
         )
 
-        assertEquals("classes2.dex", guardEntry)
-        assertEquals("dex0", String(read(out, "classes.dex")))
-        assertEquals("GUARD-DEX", String(read(out, "classes2.dex")))
-        assertEquals("GUARDED-MANIFEST", String(read(out, "AndroidManifest.xml")))
+        assertEquals("SHELL-DEX", String(read(out, "classes.dex")))
+        assertEquals("APH1-ENCRYPTED", String(read(out, Constants.encryptedDexEntry(0))))
+        assertFalse(names(out).contains("classes2.dex"))
         assertFalse(names(out).any { it.startsWith("META-INF/") })
+        assertEquals(
+            0L,
+            dataOffset(out, "lib/arm64-v8a/${Constants.SHELL_LIBRARY_NAME}") % 16384,
+        )
     }
 
     // Absolute offset where an entry's data begins (reads the local file header's name+extra lengths).
     private fun dataOffset(apk: File, name: String): Long {
         RandomAccessFile(apk, "r").use { raf ->
-            // Walk local file headers from the start until we hit `name`.
+            // Scan local headers. DEFLATED entries may use a trailing data descriptor, leaving
+            // compressedSize=0 in their local header, so walking by the size field is unreliable.
             var pos = 0L
-            while (true) {
+            while (pos + 30 <= raf.length()) {
                 raf.seek(pos)
                 val sig = readLE32(raf)
-                if (sig != 0x04034b50L) break // not a local file header (reached central dir)
+                if (sig != 0x04034b50L) {
+                    pos++
+                    continue
+                }
                 raf.seek(pos + 26)
                 val nameLen = readLE16(raf)
                 val extraLen = readLE16(raf)
                 val nameBytes = ByteArray(nameLen); raf.seek(pos + 30); raf.readFully(nameBytes)
                 val entryName = String(nameBytes, Charsets.UTF_8)
-                val compSize = run { raf.seek(pos + 18); readLE32(raf) }
                 val dataStart = pos + 30 + nameLen + extraLen
                 if (entryName == name) return dataStart
-                pos = dataStart + compSize
+                pos = dataStart
             }
             error("entry $name not found while scanning local headers")
         }

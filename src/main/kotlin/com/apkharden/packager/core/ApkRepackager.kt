@@ -7,6 +7,7 @@ import java.nio.ByteOrder
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+import java.util.zip.CRC32
 
 object ApkRepackager {
 
@@ -24,44 +25,55 @@ object ApkRepackager {
     private const val ALIGN_EXTRA_HEADER_ID = 0xd935.toShort()
     private const val ALIGN_EXTRA_MIN_SIZE = 6 // 2 (id) + 2 (size) + 2 (alignment value)
 
-    /** Appends a statically loaded guard dex while preserving every business dex in place. */
-    fun injectGuard(
+    /** Replaces all business DEX entries with the shell and authenticated encrypted payloads. */
+    fun wrapEncryptedDex(
         input: File,
         output: File,
         patchedManifest: ByteArray,
-        guardDex: ByteArray,
-    ): String {
-        var injectedDexName = ""
-        ZipFile(input).use { zin ->
-            val dexNames = zin.entries().asSequence()
-                .map { it.name }
-                .filter { it.matches(dexRegex) }
-                .toList()
-            require(dexNames.isNotEmpty()) { "APK contains no classes.dex" }
-            val nextDexIndex = dexNames.maxOf(::dexIndex) + 1
-            val guardDexName = if (nextDexIndex == 1) "classes.dex" else "classes$nextDexIndex.dex"
-            injectedDexName = guardDexName
+        shellDex: ByteArray,
+        encryptedDexes: List<ByteArray>,
+        metadata: ByteArray,
+        nativeLibraries: Map<String, ByteArray>,
+    ) {
+        require(encryptedDexes.isNotEmpty()) { "Encrypted shell requires at least one DEX payload" }
+        require(nativeLibraries.isNotEmpty()) { "Encrypted shell requires at least one native ABI" }
+        ZipFile(input).use { inputZip ->
+            val names = inputZip.entries().asSequence().map { it.name }.toSet()
+            require(names.none { it.startsWith(Constants.PAYLOAD_DIRECTORY) }) {
+                "APK already contains an encrypted ApkHarden payload"
+            }
+            require(nativeLibraries.keys.none { abi ->
+                "lib/$abi/${Constants.SHELL_LIBRARY_NAME}" in names
+            }) { "APK already contains ${Constants.SHELL_LIBRARY_NAME}" }
 
             output.outputStream().buffered().use { raw ->
                 val counting = CountingOutputStream(raw)
-                ZipOutputStream(counting).use { zout ->
-                    for (entry in zin.entries()) {
+                ZipOutputStream(counting).use { zip ->
+                    for (entry in inputZip.entries()) {
                         val name = entry.name
-                        if (name == "AndroidManifest.xml") continue
-                        if (isSignatureEntry(name)) continue
-                        copyEntry(zin, entry, zout, counting.count)
+                        if (name.matches(dexRegex) || name == "AndroidManifest.xml" || isSignatureEntry(name)) {
+                            continue
+                        }
+                        copyEntry(inputZip, entry, zip, counting.count)
                     }
-                    write(zout, "AndroidManifest.xml", patchedManifest)
-                    write(zout, guardDexName, guardDex)
+                    write(zip, "AndroidManifest.xml", patchedManifest)
+                    write(zip, "classes.dex", shellDex)
+                    write(zip, Constants.PAYLOAD_METADATA, metadata)
+                    encryptedDexes.forEachIndexed { index, payload ->
+                        writeStored(zip, Constants.encryptedDexEntry(index), payload, counting.count)
+                    }
+                    nativeLibraries.toSortedMap().forEach { (abi, library) ->
+                        writeStored(
+                            zip,
+                            "lib/$abi/${Constants.SHELL_LIBRARY_NAME}",
+                            library,
+                            counting.count,
+                        )
+                    }
                 }
             }
         }
-        return injectedDexName
     }
-
-    private fun dexIndex(name: String): Int =
-        if (name == "classes.dex") 1
-        else name.removePrefix("classes").removeSuffix(".dex").toInt()
 
     private fun isSignatureEntry(name: String): Boolean =
         name.startsWith("META-INF/") &&
@@ -93,6 +105,24 @@ object ApkRepackager {
         zout.putNextEntry(ZipEntry(name))
         zout.write(bytes)
         zout.closeEntry()
+    }
+
+    private fun writeStored(
+        output: ZipOutputStream,
+        name: String,
+        bytes: ByteArray,
+        offset: Long,
+    ) {
+        val entry = ZipEntry(name).apply {
+            method = ZipEntry.STORED
+            size = bytes.size.toLong()
+            compressedSize = bytes.size.toLong()
+            crc = CRC32().apply { update(bytes) }.value
+        }
+        alignStored(entry, name, offset)
+        output.putNextEntry(entry)
+        output.write(bytes)
+        output.closeEntry()
     }
 
     /**

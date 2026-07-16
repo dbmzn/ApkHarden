@@ -10,10 +10,19 @@ object ManifestPatcher {
     private const val ID_process = 0x01010011 // android:process
     private const val ID_authorities = 0x01010018 // android:authorities
     private const val ID_value = 0x01010024  // android:value
+    private const val ID_appComponentFactory = 0x0101057a // android:appComponentFactory
 
     fun readApplicationClass(manifestBytes: ByteArray): String? {
         val m = AndroidManifestBlock.load(manifestBytes.inputStream())
         return m.applicationClassName
+    }
+
+    fun readApplicationComponentFactory(manifestBytes: ByteArray): String? {
+        val manifest = AndroidManifestBlock.load(manifestBytes.inputStream())
+        return manifest.applicationElement
+            ?.searchAttributeByResourceId(ID_appComponentFactory)
+            ?.valueAsString
+            ?.takeIf(String::isNotBlank)
     }
 
     fun readMetaData(manifestBytes: ByteArray): Map<String, String> {
@@ -28,50 +37,46 @@ object ManifestPatcher {
     }
 
     /**
-     * Adds a static guard provider without replacing the business Application.
-     *
-     * One provider is installed in the main process and one in every explicitly declared app
-     * process. This keeps signature and anti-debug checks active when a remote service/provider is
-     * the first component launched. The injected class lives in a normal classesN.dex entry.
+     * Replaces the public APK entry points with the encrypted-DEX shell while retaining the
+     * original Application and AppComponentFactory names for runtime delegation.
      */
-    fun patchGuard(
+    fun patchEncryptedShell(
         manifestBytes: ByteArray,
         sigHash: String,
-    ): ByteArray {
+        dexCount: Int,
+    ): PatchedShellManifest {
         require(sigHash.matches(Regex("[0-9a-fA-F]{64}"))) {
             "sigHash must contain 64 hexadecimal characters"
         }
-        val m = AndroidManifestBlock.load(manifestBytes.inputStream())
-        val packageName = requireNotNull(m.packageName).also {
+        require(dexCount > 0) { "Encrypted shell requires at least one business DEX" }
+        val originalApplication = readApplicationClass(manifestBytes).orEmpty()
+        val originalFactory = readApplicationComponentFactory(manifestBytes).orEmpty()
+        require(originalApplication != Constants.SHELL_APPLICATION) {
+            "APK is already protected by ${Constants.SHELL_APPLICATION}"
+        }
+        val existingMetadata = readMetaData(manifestBytes)
+        require(Constants.META_DEX_COUNT !in existingMetadata) {
+            "APK already contains ${Constants.META_DEX_COUNT}"
+        }
+
+        val manifest = AndroidManifestBlock.load(manifestBytes.inputStream())
+        val packageName = requireNotNull(manifest.packageName).also {
             require(it.isNotBlank()) { "Manifest package name is blank" }
         }
-        val app = m.applicationElement
+        val app = manifest.applicationElement
             ?: throw IllegalStateException("Manifest has no <application> element")
-        val existingProviders = m.listApplicationElementsByTag("provider")
-        require(existingProviders.none { provider ->
-            provider.searchAttributeByResourceId(ID_name)?.valueAsString == Constants.GUARD_PROVIDER
-        }) { "APK is already protected by ${Constants.GUARD_PROVIDER}" }
-        require(Constants.META_SIG_HASH !in readMetaData(manifestBytes)) {
-            "APK already contains ${Constants.META_SIG_HASH}"
-        }
+        manifest.applicationClassName = Constants.SHELL_APPLICATION
+        app.getOrCreateAndroidAttribute("appComponentFactory", ID_appComponentFactory).valueAsString =
+            Constants.SHELL_COMPONENT_FACTORY
 
+        addMeta(app, Constants.META_ORIGINAL_APPLICATION, originalApplication)
+        addMeta(app, Constants.META_ORIGINAL_COMPONENT_FACTORY, originalFactory)
         addMeta(app, Constants.META_SIG_HASH, sigHash.lowercase())
+        addMeta(app, Constants.META_DEX_COUNT, dexCount.toString())
+        addGuardProviders(manifest, app, packageName)
 
-        val processes = COMPONENT_TAGS
-            .flatMap { tag -> m.listApplicationElementsByTag(tag) }
-            .mapNotNull { element ->
-                element.searchAttributeByResourceId(ID_process)?.valueAsString?.takeIf(String::isNotBlank)
-            }
-            .distinct()
-            .sorted()
-
-        addGuardProvider(app, packageName, process = null, suffix = "main")
-        processes.forEachIndexed { index, process ->
-            addGuardProvider(app, packageName, process, "p${index + 1}")
-        }
-
-        m.refreshFull()
-        return m.bytes
+        manifest.refreshFull()
+        return PatchedShellManifest(manifest.bytes, originalApplication, originalFactory)
     }
 
     fun guardProcesses(manifestBytes: ByteArray): Set<String> {
@@ -84,6 +89,28 @@ object ManifestPatcher {
                 provider.searchAttributeByResourceId(ID_process)?.valueAsString.orEmpty()
             }
             .toSet()
+    }
+
+    private fun addGuardProviders(
+        manifest: AndroidManifestBlock,
+        app: ResXmlElement,
+        packageName: String,
+    ) {
+        val existingProviders = manifest.listApplicationElementsByTag("provider")
+        require(existingProviders.none { provider ->
+            provider.searchAttributeByResourceId(ID_name)?.valueAsString == Constants.GUARD_PROVIDER
+        }) { "APK is already protected by ${Constants.GUARD_PROVIDER}" }
+        val processes = COMPONENT_TAGS
+            .flatMap { tag -> manifest.listApplicationElementsByTag(tag) }
+            .mapNotNull { element ->
+                element.searchAttributeByResourceId(ID_process)?.valueAsString?.takeIf(String::isNotBlank)
+            }
+            .distinct()
+            .sorted()
+        addGuardProvider(app, packageName, process = null, suffix = "main")
+        processes.forEachIndexed { index, process ->
+            addGuardProvider(app, packageName, process, "p${index + 1}")
+        }
     }
 
     private fun addGuardProvider(
@@ -110,3 +137,9 @@ object ManifestPatcher {
 
     private val COMPONENT_TAGS = listOf("activity", "activity-alias", "service", "receiver", "provider")
 }
+
+data class PatchedShellManifest(
+    val bytes: ByteArray,
+    val originalApplication: String,
+    val originalComponentFactory: String,
+)

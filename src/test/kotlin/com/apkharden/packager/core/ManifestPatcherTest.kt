@@ -28,29 +28,35 @@ class ManifestPatcherTest {
     }
 
     @Test
-    fun `static guard preserves application and covers main and explicit processes`() {
+    fun `encrypted shell preserves original entry points and installs shell factory`() {
         val manifest = AndroidManifestBlock().apply {
             packageName = "com.example.demo"
             applicationClassName = "com.example.demo.MyApp"
-            getOrCreateApplicationElement().newElement("service").apply {
-                getOrCreateAndroidAttribute("process", 0x01010011).valueAsString = ":remote"
-            }
+            getOrCreateApplicationElement()
+                .getOrCreateAndroidAttribute("appComponentFactory", 0x0101057a)
+                .valueAsString = "androidx.core.app.CoreComponentFactory"
             refreshFull()
         }.bytes
 
-        val patched = ManifestPatcher.patchGuard(manifest, "ab".repeat(32))
+        val result = ManifestPatcher.patchEncryptedShell(manifest, "cd".repeat(32), dexCount = 3)
 
-        assertEquals("com.example.demo.MyApp", ManifestPatcher.readApplicationClass(patched))
-        assertEquals("ab".repeat(32), ManifestPatcher.readMetaData(patched)[Constants.META_SIG_HASH])
-        assertEquals(setOf("", ":remote"), ManifestPatcher.guardProcesses(patched))
+        assertEquals(Constants.SHELL_APPLICATION, ManifestPatcher.readApplicationClass(result.bytes))
+        assertEquals(Constants.SHELL_COMPONENT_FACTORY, ManifestPatcher.readApplicationComponentFactory(result.bytes))
+        assertEquals("com.example.demo.MyApp", result.originalApplication)
+        assertEquals("androidx.core.app.CoreComponentFactory", result.originalComponentFactory)
+        val metadata = ManifestPatcher.readMetaData(result.bytes)
+        assertEquals("com.example.demo.MyApp", metadata[Constants.META_ORIGINAL_APPLICATION])
+        assertEquals("androidx.core.app.CoreComponentFactory", metadata[Constants.META_ORIGINAL_COMPONENT_FACTORY])
+        assertEquals("3", metadata[Constants.META_DEX_COUNT])
+        assertEquals(setOf(""), ManifestPatcher.guardProcesses(result.bytes))
     }
 
     @Test
-    fun `static guard rejects an already protected APK`() {
-        val once = ManifestPatcher.patchGuard(baseManifest(null), "ab".repeat(32))
+    fun `encrypted shell rejects re-hardening`() {
+        val once = ManifestPatcher.patchEncryptedShell(baseManifest(null), "ef".repeat(32), 1).bytes
 
         assertThrows(IllegalArgumentException::class.java) {
-            ManifestPatcher.patchGuard(once, "ab".repeat(32))
+            ManifestPatcher.patchEncryptedShell(once, "ef".repeat(32), 1)
         }
     }
 }

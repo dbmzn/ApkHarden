@@ -41,11 +41,11 @@ fun HardenScreen(
 
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("APK 加固", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.onBackground)
-        Text("静态守卫注入 · 签名校验 · 反调试 · 16KB 对齐 · V1+V2+V3 重签",
+        Text("业务 DEX 加密 · Native 解密 · 内存加载 · 16KB 对齐 · V1+V2+V3 重签",
             style = MaterialTheme.typography.caption, color = sem.subtle,
             modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
         Text(
-            "无需修改业务 App，也无需接入 Gradle 插件；选择 APK 和正式签名后直接生成加固包",
+            "无需修改业务 App；加固后 APK 仅保留壳 DEX，业务 classes*.dex 以 AES-256-GCM 密文保存",
             style = MaterialTheme.typography.body2,
             color = sem.advice,
             modifier = Modifier.fillMaxWidth()

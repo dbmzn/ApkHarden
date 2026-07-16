@@ -2,7 +2,10 @@
 
 一个自包含的 Android APK 加固工具（Compose Desktop GUI）。无需修改业务工程：首次保存正式签名后，只需选择 APK 和输出路径即可生成已加固、已签名的 APK。
 
-- **静态守卫注入**：保留业务 `classes*.dex`，追加由系统正常加载的 `guard.dex`，不释放可写 DEX、不替换业务 `Application`、不调用隐藏 API
+- **业务 DEX 加密**：压缩后使用每包独立 AES-256-GCM 密钥加密，APK 中不再保留明文业务 `classes*.dex`
+- **Native 解密**：每个输出 APK 的随机密钥注入对应 ABI 的 `libapkharden.so`，密文被修改即拒绝加载
+- **现代内存加载**：Android 10（API 29）以上通过公开 `AppComponentFactory` + `InMemoryDexClassLoader` 在内存加载
+- **旧系统兼容**：Android 6～9 使用应用私有、版本隔离且加载前设为只读的 DEX 缓存
 - **防二次打包**：运行时校验签名 SHA-256，不符即退出
 - **基础反调试**：检测调试器 / `TracerPid` / `FLAG_DEBUGGABLE`
 - **多进程覆盖**：为主进程和 Manifest 中显式声明的业务进程注入非导出 Guard Provider
@@ -16,10 +19,13 @@ minSdk 23（Android 6.0）+。打包全程纯 JVM 库（[apksig](https://android
 
 | 部分 | 说明 |
 |---|---|
-| `src/main/kotlin/.../packager/` | 桌面端、APK 检查、静态守卫注入、重打包与签名 |
-| `guard/` | 静态 Guard Provider、签名校验与反调试源码 |
-| `src/main/resources/guard.dex` | 生产上传式流程使用的最小守卫 DEX |
-| `scripts/build-guard.ps1` | 重建 `guard.dex`（需 Android SDK） |
+| `src/main/kotlin/.../packager/` | 桌面端、APK 检查、DEX 加密壳注入、重打包与签名 |
+| `guard/` | Guard Provider、签名校验与反调试源码 |
+| `shell/` | Proxy Application、AppComponentFactory 与多版本 ClassLoader 接入 |
+| `native/` | Native 密钥槽、AES-GCM 调用和 DEX 解压 |
+| `src/main/resources/shell.dex` | 加固 APK 中唯一公开的壳 DEX |
+| `src/main/resources/shell-libs/` | arm64-v8a、armeabi-v7a、x86_64、x86 的 16KB 壳库 |
+| `scripts/build-shell.ps1` | 使用 Android SDK/NDK 重建壳 DEX 和 Native 库 |
 
 ## 使用
 
@@ -40,7 +46,7 @@ app-hardened-report.json
 ```
 ./gradlew test              # 运行单元 + 集成测试
 ./gradlew deployToDesktop   # 打包发行版并镜像到 ~/ApkHarden（桌面快捷方式指向处），先关掉运行中的实例
-$env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-guard.ps1   # 改了 guard/ 后重建 guard.dex
+$env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-shell.ps1   # 改了 guard/shell/native 后重建壳资源
 ```
 
 > 打包发行版会显式带上 `jdk.unsupported` 模块：LWJGL 初始化依赖 `sun.misc.Unsafe`，jlink 默认会裁掉它，导致打包后（而非 `gradlew run`）文件对话框崩溃。
@@ -49,4 +55,4 @@ $env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-guard.ps1   # 改了 guard
 
 ## 局限
 
-静态守卫不会加密全部业务 DEX，纯 Java 层保护也可被 Frida/Xposed 绕过。更强的代码隐藏需要 Native 壳、VMP 或服务端商业加固能力，不在当前安全兼容基线内。
+业务 DEX 在 APK 中不再能被 JADX 直接反编译，但运行时仍必须解密执行；具备 root、Hook 或内存 Dump 能力的攻击者仍可能脱壳。当前属于基础 DEX 壳，不包含 VMP、DEX2C、SO 加壳或高强度 Frida/Xposed 对抗。

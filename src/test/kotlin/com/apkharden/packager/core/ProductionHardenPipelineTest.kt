@@ -17,10 +17,10 @@ class ProductionHardenPipelineTest {
     lateinit var temp: File
 
     private val keystore = File("src/test/resources/test.jks")
-    private val sampleDex = "BUSINESS-DEX-CONTENT".toByteArray()
+    private val sampleDex = requireNotNull(javaClass.getResourceAsStream("/shell.dex")).use { it.readBytes() }
 
     @Test
-    fun `upload-only hardening preserves business dex and writes signed output and report`() {
+    fun `upload-only hardening encrypts business dex and writes signed shell plus report`() {
         val input = apk(debuggable = false)
         val output = File(temp, "app-hardened.apk")
 
@@ -36,21 +36,28 @@ class ProductionHardenPipelineTest {
         assertTrue(ApkSignerWrapper.verify(result.apk))
         assertTrue(result.reportFile.isFile)
         assertEquals("com.example.upload", result.report.packageName)
-        assertEquals("classes2.dex", result.report.guardDexEntry)
+        assertEquals(1, result.report.businessDexCount)
+        assertEquals(listOf(Constants.encryptedDexEntry(0)), result.report.encryptedDexEntries)
+        assertEquals(setOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86"), result.report.shellAbis)
         assertEquals(setOf(""), result.report.guardedProcesses)
         ZipFile(output).use { zip ->
-            assertTrue(zip.getInputStream(zip.getEntry("classes.dex")).readBytes().contentEquals(sampleDex))
-            assertNotNull(zip.getEntry("classes2.dex"))
-            val guardDex = zip.getInputStream(zip.getEntry("classes2.dex")).readBytes()
-            val guardText = String(guardDex, Charsets.ISO_8859_1)
-            assertTrue(guardText.contains("Lcom/apkharden/guard/AntiDebug;"))
-            assertTrue(guardText.contains("Lcom/apkharden/guard/AntiTamper;"))
-            assertTrue(guardText.contains("Lcom/apkharden/guard/GuardProvider;"))
+            val shellDex = zip.getInputStream(zip.getEntry("classes.dex")).readBytes()
+            assertTrue(shellDex.contentEquals(sampleDex))
+            val shellText = String(shellDex, Charsets.ISO_8859_1)
+            assertTrue(shellText.contains("Lcom/apkharden/shell/ProxyApplication;"))
+            assertTrue(shellText.contains("Lcom/apkharden/shell/ShellComponentFactory;"))
+            val encrypted = zip.getInputStream(zip.getEntry(Constants.encryptedDexEntry(0))).readBytes()
+            assertTrue(encrypted.copyOfRange(0, 4).contentEquals("APH1".encodeToByteArray()))
+            assertTrue(!String(encrypted, Charsets.ISO_8859_1).contains("Lcom/apkharden/guard/GuardProvider;"))
+            assertNotNull(zip.getEntry(Constants.PAYLOAD_METADATA))
+            assertNotNull(zip.getEntry("lib/arm64-v8a/${Constants.SHELL_LIBRARY_NAME}"))
             val manifest = zip.getInputStream(zip.getEntry("AndroidManifest.xml")).readBytes()
-            assertEquals("com.example.upload.App", ManifestPatcher.readApplicationClass(manifest))
+            assertEquals(Constants.SHELL_APPLICATION, ManifestPatcher.readApplicationClass(manifest))
+            assertEquals(Constants.SHELL_COMPONENT_FACTORY, ManifestPatcher.readApplicationComponentFactory(manifest))
+            assertEquals("com.example.upload.App", ManifestPatcher.readMetaData(manifest)[Constants.META_ORIGINAL_APPLICATION])
             assertEquals(64, ManifestPatcher.readMetaData(manifest)[Constants.META_SIG_HASH]?.length)
         }
-        assertTrue(result.reportFile.readText().contains("STATIC_GUARD"))
+        assertTrue(result.reportFile.readText().contains("ENCRYPTED_DEX_SHELL"))
     }
 
     @Test

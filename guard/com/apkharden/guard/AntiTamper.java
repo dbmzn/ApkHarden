@@ -8,10 +8,10 @@ import android.content.pm.SigningInfo;
 import android.os.Build;
 import java.security.MessageDigest;
 
-final class AntiTamper {
+public final class AntiTamper {
     /** @return true if the current signing cert matches the expected hash. */
     @SuppressWarnings("deprecation")
-    static boolean verify(Context ctx, String expectedHashHex) {
+    public static boolean verify(Context ctx, String expectedHashHex) {
         try {
             PackageManager pm = ctx.getPackageManager();
             String pkg = ctx.getPackageName();
