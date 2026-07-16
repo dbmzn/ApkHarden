@@ -5,6 +5,7 @@
 - **业务 DEX 加密**：压缩后使用每包独立 AES-256-GCM 密钥加密，APK 中不再保留明文业务 `classes*.dex`
 - **Native 解密**：每个输出 APK 的随机密钥注入对应 ABI 的 `libapkharden.so`，密文被修改即拒绝加载
 - **现代内存加载**：Android 10（API 29）以上通过公开 `AppComponentFactory` + `InMemoryDexClassLoader` 在内存加载
+- **Native 库兼容**：内存 ClassLoader 同时继承安装目录和 `apk!/lib/<abi>` 搜索路径，兼容 `extractNativeLibs=false` 下的 MMKV 等业务库
 - **旧系统兼容**：Android 6～9 使用应用私有、版本隔离且加载前设为只读的 DEX 缓存
 - **防二次打包**：运行时校验签名 SHA-256，不符即退出
 - **基础反调试**：检测调试器 / `TracerPid` / `FLAG_DEBUGGABLE`
@@ -41,6 +42,12 @@ app-hardened.apk
 app-hardened-report.json
 ```
 
+命令行也可以复用桌面端已保存的 DPAPI 签名配置，避免把密码写入命令历史：
+
+```powershell
+./gradlew harden --args="--input app.apk --output app-hardened.apk --savedProfile true"
+```
+
 ## 开发
 
 ```
@@ -51,7 +58,19 @@ $env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-shell.ps1   # 改了 guard
 
 > 打包发行版会显式带上 `jdk.unsupported` 模块：LWJGL 初始化依赖 `sun.misc.Unsafe`，jlink 默认会裁掉它，导致打包后（而非 `gradlew run`）文件对话框崩溃。
 
-生成包正式上线前仍应自行完成覆盖安装与兼容性验证，尤其关注 Android 16、16KB page size 和多进程入口。
+### 已验证兼容性
+
+当前加密壳已完成以下安装与冷启动验证：
+
+| 环境 | 验证内容 | 结果 |
+|---|---|---|
+| API 26 / x86 模拟器 | Provider、原 Application、Activity、多 DEX | 通过 |
+| API 28 / ARMv7 转译模拟器 | 真实 `product_32` 业务 APK | 通过 |
+| API 29 / 华为 arm64 真机 / 4KB | 真实 `product_64` 业务 APK、MMKV native 加载 | 通过 |
+| API 36 / 小米 arm64 真机 / 4KB | 真实 `product_64` 业务 APK | 通过 |
+| API 36 / x86_64 模拟器 / 16KB | 真实 `product_64` 业务 APK、ARM64 转译 | 通过 |
+
+这组验证覆盖 API 24～27 的旧版 ClassLoader 分支、API 28 兼容分支和 API 29+ 内存加载分支。正式上线仍建议先灰度并监控启动崩溃；模拟器不能替代所有厂商 ROM 和业务功能回归。
 
 ## 局限
 

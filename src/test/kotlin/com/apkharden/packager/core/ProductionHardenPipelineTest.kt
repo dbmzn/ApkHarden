@@ -46,6 +46,7 @@ class ProductionHardenPipelineTest {
             val shellText = String(shellDex, Charsets.ISO_8859_1)
             assertTrue(shellText.contains("Lcom/apkharden/shell/ProxyApplication;"))
             assertTrue(shellText.contains("Lcom/apkharden/shell/ShellComponentFactory;"))
+            assertTrue(shellText.contains("!/lib/"))
             val encrypted = zip.getInputStream(zip.getEntry(Constants.encryptedDexEntry(0))).readBytes()
             assertTrue(encrypted.copyOfRange(0, 4).contentEquals("APH1".encodeToByteArray()))
             assertTrue(!String(encrypted, Charsets.ISO_8859_1).contains("Lcom/apkharden/guard/GuardProvider;"))
