@@ -2,6 +2,8 @@ package com.apkharden.packager.core
 
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import java.io.File
+import java.security.MessageDigest
+import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -50,7 +52,14 @@ class ProductionHardenPipelineTest {
             val encrypted = zip.getInputStream(zip.getEntry(Constants.encryptedDexEntry(0))).readBytes()
             assertTrue(encrypted.copyOfRange(0, 4).contentEquals("APH1".encodeToByteArray()))
             assertTrue(!String(encrypted, Charsets.ISO_8859_1).contains("Lcom/apkharden/guard/GuardProvider;"))
-            assertNotNull(zip.getEntry(Constants.PAYLOAD_METADATA))
+            val metadataEntry = zip.getEntry(Constants.PAYLOAD_METADATA)
+            assertNotNull(metadataEntry)
+            val metadata = Properties().apply {
+                zip.getInputStream(requireNotNull(metadataEntry)).use { load(it) }
+            }
+            assertEquals("2", metadata.getProperty("formatVersion"))
+            assertEquals(sampleDex.size.toString(), metadata.getProperty("dex.0.size"))
+            assertEquals(sha256(sampleDex), metadata.getProperty("dex.0.sha256"))
             assertNotNull(zip.getEntry("lib/arm64-v8a/${Constants.SHELL_LIBRARY_NAME}"))
             val manifest = zip.getInputStream(zip.getEntry("AndroidManifest.xml")).readBytes()
             assertEquals(Constants.SHELL_APPLICATION, ManifestPatcher.readApplicationClass(manifest))
@@ -99,4 +108,9 @@ class ProductionHardenPipelineTest {
             }
         }
     }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 }

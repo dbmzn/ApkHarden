@@ -9,15 +9,11 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Process;
+import android.util.Log;
 
-/**
- * Static APK guard used by the upload-only hardening flow.
- *
- * The provider is injected into the final manifest and its dex is appended to the APK. Android
- * loads it through the normal installed APK class path, so this path does not extract writable dex,
- * create a secondary class loader, replace the business Application, or use hidden APIs.
- */
+/** Starts signature and anti-debug checks before business components in every declared process. */
 public final class GuardProvider extends ContentProvider {
+    private static final String TAG = "ApkHarden";
     private static final String META_SIG_HASH = "com.apkharden.SIG_HASH";
 
     @Override
@@ -29,6 +25,7 @@ public final class GuardProvider extends ContentProvider {
         if (expectedHash.length() != 64
                 || AntiDebug.isDetected(context)
                 || !AntiTamper.verify(context, expectedHash)) {
+            Log.e(TAG, "APH-E001 static guard rejected the process");
             Process.killProcess(Process.myPid());
             System.exit(0);
             return false;

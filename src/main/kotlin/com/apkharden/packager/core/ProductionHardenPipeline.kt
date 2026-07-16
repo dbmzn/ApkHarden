@@ -5,6 +5,7 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.security.MessageDigest
 import java.util.UUID
 import java.util.zip.ZipFile
 import kotlinx.serialization.Serializable
@@ -107,6 +108,8 @@ object ProductionHardenPipeline {
             dexCount = encryptedDexes.size,
             originalApplication = patched.originalApplication,
             originalComponentFactory = patched.originalComponentFactory,
+            dexSizes = source.dexes.map(ByteArray::size),
+            dexSha256 = source.dexes.map(::sha256),
         ).encode()
 
         log("注入壳 DEX、Native 解密库和多进程运行时守卫…")
@@ -218,6 +221,11 @@ object ProductionHardenPipeline {
         }
         return inputAbis
     }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 
     private val REPORT_JSON = Json {
         prettyPrint = true

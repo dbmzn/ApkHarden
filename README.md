@@ -54,6 +54,7 @@ app-hardened-report.json
 ./gradlew test              # 运行单元 + 集成测试
 ./gradlew deployToDesktop   # 打包发行版并镜像到 ~/ApkHarden（桌面快捷方式指向处），先关掉运行中的实例
 $env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-shell.ps1   # 改了 guard/shell/native 后重建壳资源
+pwsh scripts/verify-device-launch.ps1 -Apk app-hardened.apk -PackageName com.example.app -Serial <设备序列号>  # 安装、冷启动和崩溃门禁
 ```
 
 > 打包发行版会显式带上 `jdk.unsupported` 模块：LWJGL 初始化依赖 `sun.misc.Unsafe`，jlink 默认会裁掉它，导致打包后（而非 `gradlew run`）文件对话框崩溃。
@@ -71,6 +72,8 @@ $env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-shell.ps1   # 改了 guard
 | API 36 / x86_64 模拟器 / 16KB | 真实 `product_64` 业务 APK、ARM64 转译 | 通过 |
 
 这组验证覆盖 API 24～27 的旧版 ClassLoader 分支、API 28 兼容分支和 API 29+ 内存加载分支。正式上线仍建议先灰度并监控启动崩溃；模拟器不能替代所有厂商 ROM 和业务功能回归。
+
+运行时按单个 DEX 依次解密并立即清零临时数组，避免同时保留全部明文 DEX；旧系统缓存会按 APK 内签名保护的长度和 SHA-256 元数据复验。壳初始化失败时可在 logcat 中检索 `APH-E` 诊断码。
 
 ## 局限
 

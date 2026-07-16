@@ -13,12 +13,22 @@ final class ShellMetadata {
     final String payloadId;
     final String originalApplication;
     final String originalComponentFactory;
+    final int[] dexSizes;
+    final String[] dexSha256;
 
-    private ShellMetadata(int dexCount, String payloadId, String app, String factory) {
+    private ShellMetadata(
+            int dexCount,
+            String payloadId,
+            String app,
+            String factory,
+            int[] dexSizes,
+            String[] dexSha256) {
         this.dexCount = dexCount;
         this.payloadId = payloadId;
         this.originalApplication = app;
         this.originalComponentFactory = factory;
+        this.dexSizes = dexSizes;
+        this.dexSha256 = dexSha256;
     }
 
     static ShellMetadata read(String apkPath) throws Exception {
@@ -38,11 +48,22 @@ final class ShellMetadata {
             if (count <= 0 || id.length() < 8) {
                 throw new IllegalStateException("ApkHarden metadata is invalid");
             }
+            int[] sizes = new int[count];
+            String[] hashes = new String[count];
+            for (int i = 0; i < count; i++) {
+                sizes[i] = Integer.parseInt(properties.getProperty("dex." + i + ".size", "0"));
+                hashes[i] = properties.getProperty("dex." + i + ".sha256", "").trim().toLowerCase();
+                if (sizes[i] <= 0 || !hashes[i].matches("[0-9a-f]{64}")) {
+                    throw new IllegalStateException("ApkHarden DEX metadata " + i + " is invalid");
+                }
+            }
             return new ShellMetadata(
                     count,
                     id,
                     properties.getProperty("originalApplication", "").trim(),
-                    properties.getProperty("originalComponentFactory", "").trim());
+                    properties.getProperty("originalComponentFactory", "").trim(),
+                    sizes,
+                    hashes);
         } finally {
             apk.close();
         }

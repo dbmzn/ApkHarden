@@ -23,7 +23,8 @@ public final class ShellComponentFactory extends AppComponentFactory {
             install(loaded);
             return loaded.classLoader;
         } catch (Throwable error) {
-            throw new IllegalStateException("ApkHarden failed to initialize encrypted DEX", error);
+            throw new IllegalStateException(
+                    "APH-E201 ApkHarden failed to initialize encrypted DEX", error);
         }
     }
 

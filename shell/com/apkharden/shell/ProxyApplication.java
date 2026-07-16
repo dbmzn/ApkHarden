@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
+import android.util.Log;
 
 import com.apkharden.guard.AntiDebug;
 import com.apkharden.guard.AntiTamper;
@@ -18,6 +19,7 @@ import java.util.List;
 
 /** Compatibility entry point for API 23-28. API 29+ starts the real Application via the factory. */
 public final class ProxyApplication extends Application {
+    private static final String TAG = "ApkHarden";
     private static final String META_SIG_HASH = "com.apkharden.SIG_HASH";
     private static final String META_ORIGINAL_APPLICATION = "com.apkharden.ORIGINAL_APPLICATION";
 
@@ -33,6 +35,7 @@ public final class ProxyApplication extends Application {
             if (expectedSignature.length() != 64
                     || AntiDebug.isDetected(base)
                     || !AntiTamper.verify(base, expectedSignature)) {
+                Log.e(TAG, "APH-E101 runtime guard rejected the process");
                 failClosed();
                 return;
             }
@@ -50,10 +53,12 @@ public final class ProxyApplication extends Application {
             }
             Thread.currentThread().setContextClassLoader(loaded.classLoader);
 
-            // AppComponentFactory handles API 28 components. API 23-27 need the package loader
-            // replaced before the framework creates providers, activities, receivers or services.
-            if (Build.VERSION.SDK_INT <= 27) replaceLoadedApkClassLoader(base, loaded.classLoader);
+            // API 28's factory creates components with the business loader, but ContextImpl and
+            // LayoutInflater still consult LoadedApk.mClassLoader for custom views and resources.
+            // Keep the package loader consistent on every legacy release.
+            if (Build.VERSION.SDK_INT <= 28) replaceLoadedApkClassLoader(base, loaded.classLoader);
         } catch (Throwable error) {
+            Log.e(TAG, "APH-E102 legacy shell initialization failed", error);
             failClosed();
         }
     }
@@ -82,7 +87,8 @@ public final class ProxyApplication extends Application {
             swapApplication(real);
             real.onCreate();
         } catch (Throwable error) {
-            throw new IllegalStateException("ApkHarden failed to start the original Application", error);
+            throw new IllegalStateException(
+                    "APH-E103 ApkHarden failed to start the original Application", error);
         }
     }
 
