@@ -3,7 +3,6 @@ package com.apkharden.packager.ui.adb
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,9 +13,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
@@ -31,18 +39,32 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.awt.BasicStroke
+import java.awt.Color as AwtColor
+import java.awt.RenderingHints
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
+import java.awt.geom.Line2D
+import java.awt.geom.Rectangle2D
 import javax.imageio.ImageIO
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
-private enum class AdbTab(val label: String) {
-    LOG("日志过滤"), CAPTURE("截图与录屏"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
+internal enum class AdbTab(val label: String) {
+    CAPTURE("截图与录屏"), LOG("日志过滤"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
     DIAGNOSTICS("崩溃与 ANR"), APP("应用操作"), PROCESS("进程与页面栈")
 }
+
+internal val DEFAULT_ADB_TAB = AdbTab.CAPTURE
 
 @Composable
 fun AdbToolboxScreen() {
@@ -50,7 +72,7 @@ fun AdbToolboxScreen() {
     var serial by remember { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
-    var tab by remember { mutableStateOf(AdbTab.LOG) }
+    var tab by remember { mutableStateOf(DEFAULT_ADB_TAB) }
     var packageName by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("") }
     var permission by remember { mutableStateOf("android.permission.CAMERA") }
@@ -102,17 +124,26 @@ fun AdbToolboxScreen() {
             bytes = bytes,
             status = previewStatus,
             onDismiss = { screenshotPreview = null; previewStatus = null },
-            onCopy = {
-                runCatching { copyImageToClipboard(bytes) }
-                    .onSuccess { previewStatus = "图片已复制到剪贴板" }
+            onEdit = { previewStatus = null },
+            onCopy = { renderedBytes ->
+                runCatching { copyImageToClipboard(renderedBytes) }
+                    .onSuccess {
+                        output = "图片已复制到剪贴板"
+                        screenshotPreview = null
+                        previewStatus = null
+                    }
                     .onFailure { previewStatus = "复制失败：${friendly(it)}" }
             },
-            onSave = {
+            onSave = { renderedBytes ->
                 runCatching {
                     val file = captureFile("screenshot", "png")
-                    file.writeBytes(bytes)
+                    file.writeBytes(renderedBytes)
                     file
-                }.onSuccess { previewStatus = "截图已保存：${it.absolutePath}" }
+                }.onSuccess {
+                    output = "截图已保存：${it.absolutePath}"
+                    screenshotPreview = null
+                    previewStatus = null
+                }
                     .onFailure { previewStatus = "保存失败：${friendly(it)}" }
             },
         )
@@ -168,8 +199,14 @@ fun AdbToolboxScreen() {
                     Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.weight(1f), onClick = {
                         val file = captureFile("screenrecord", "mp4")
                         runAction("正在录屏 15 秒，请勿断开设备…") { device ->
-                            AdbDeviceService.recordScreen(device, file, 15)
-                            "录屏已保存：${file.absolutePath}"
+                            val mode = AdbDeviceService.recordScreen(device, file, 15)
+                            val modeLabel = when (mode) {
+                                com.apkharden.packager.device.ScreenRecordingMode.DEVICE -> "设备原生模式"
+                                com.apkharden.packager.device.ScreenRecordingMode.SCRCPY -> "高帧率兼容模式（最高 30 FPS）"
+                                com.apkharden.packager.device.ScreenRecordingMode.SCREENSHOT_COMPATIBILITY ->
+                                    "低帧率保底模式（4 FPS）"
+                            }
+                            "录屏已保存（$modeLabel）：${file.absolutePath}"
                         }
                     }) { Text("录屏 15 秒") }
                 }
@@ -296,36 +333,119 @@ private fun ScreenshotPreviewDialog(
     bytes: ByteArray,
     status: String?,
     onDismiss: () -> Unit,
-    onCopy: () -> Unit,
-    onSave: () -> Unit,
+    onEdit: () -> Unit,
+    onCopy: (ByteArray) -> Unit,
+    onSave: (ByteArray) -> Unit,
 ) {
     val sem = LocalSemantic.current
     val bitmap = remember(bytes) { org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap() }
+    var tool by remember(bytes) { mutableStateOf(AnnotationTool.ARROW) }
+    var annotations by remember(bytes) { mutableStateOf(emptyList<ScreenshotAnnotation>()) }
+    var draft by remember(bytes) { mutableStateOf<ScreenshotAnnotation?>(null) }
+
+    fun updateAnnotations(updated: List<ScreenshotAnnotation>) {
+        annotations = updated
+        onEdit()
+    }
+
+    fun renderedBytes(): ByteArray = renderAnnotatedScreenshot(bytes, annotations)
+
     DialogWindow(
         onCloseRequest = onDismiss,
         title = "截图预览",
-        state = rememberDialogState(width = 900.dp, height = 700.dp),
+        state = rememberDialogState(width = 1100.dp, height = 800.dp),
         resizable = true,
     ) {
         Surface(
-            modifier = Modifier.fillMaxSize().padding(18.dp),
+            modifier = Modifier.fillMaxSize().padding(12.dp),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colors.surface,
             elevation = 12.dp,
         ) {
-            Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Column(Modifier.fillMaxSize().padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("截图预览", style = MaterialTheme.typography.h6)
                     Spacer(Modifier.weight(1f))
                     Text("${bitmap.width} × ${bitmap.height}", style = MaterialTheme.typography.caption, color = sem.subtle)
                 }
-                Spacer(Modifier.height(12.dp))
-                Box(
-                    Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colors.background),
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AnnotationTool.entries.forEach { item ->
+                        OutlinedButton(
+                            onClick = { tool = item },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                backgroundColor = if (tool == item) MaterialTheme.colors.primary.copy(alpha = .14f)
+                                else MaterialTheme.colors.surface,
+                            ),
+                        ) { Text(item.label) }
+                    }
+                    Text("在图片上拖动绘制", style = MaterialTheme.typography.caption, color = sem.subtle)
+                }
+                Spacer(Modifier.height(8.dp))
+                BoxWithConstraints(
+                    Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Image(bitmap, "设备截图预览", Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
+                    val imageAspectRatio = bitmap.width.toFloat() / bitmap.height
+                    val availableAspectRatio = maxWidth.value / maxHeight.value
+                    val canvasModifier = if (imageAspectRatio >= availableAspectRatio) {
+                        Modifier.width(maxWidth).height(maxWidth / imageAspectRatio)
+                    } else {
+                        Modifier.width(maxHeight * imageAspectRatio).height(maxHeight)
+                    }
+                    androidx.compose.foundation.Canvas(
+                        canvasModifier.clip(RoundedCornerShape(12.dp)).pointerInput(bitmap.width, bitmap.height, tool) {
+                            var start: AnnotationPoint? = null
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    start = imagePointAt(offset, size.width.toFloat(), size.height.toFloat(), bitmap.width, bitmap.height)
+                                    draft = start?.let { point -> tool.annotation(point, point) }
+                                    if (draft != null) onEdit()
+                                },
+                                onDrag = { change, _ ->
+                                    val first = start ?: return@detectDragGestures
+                                    val current = imagePointAt(
+                                        change.position,
+                                        size.width.toFloat(),
+                                        size.height.toFloat(),
+                                        bitmap.width,
+                                        bitmap.height,
+                                        clampToImage = true,
+                                    ) ?: return@detectDragGestures
+                                    draft = tool.annotation(first, current)
+                                },
+                                onDragEnd = {
+                                    draft?.takeIf { it.length() >= MIN_ANNOTATION_LENGTH }?.let {
+                                        updateAnnotations(annotations + it)
+                                    }
+                                    draft = null
+                                    start = null
+                                },
+                                onDragCancel = { draft = null; start = null },
+                            )
+                        },
+                    ) {
+                        val placement = imagePlacement(size.width, size.height, bitmap.width, bitmap.height)
+                        drawImage(
+                            image = bitmap,
+                            dstOffset = IntOffset(placement.left.roundToInt(), placement.top.roundToInt()),
+                            dstSize = IntSize(placement.width.roundToInt(), placement.height.roundToInt()),
+                        )
+                        clipRect(
+                            placement.left,
+                            placement.top,
+                            placement.left + placement.width,
+                            placement.top + placement.height,
+                        ) {
+                            (annotations + listOfNotNull(draft)).forEach { annotation ->
+                                drawAnnotation(annotation, placement, bitmap.width, bitmap.height)
+                            }
+                        }
+                    }
                 }
                 status?.let {
                     Text(it, style = MaterialTheme.typography.caption,
@@ -334,14 +454,174 @@ private fun ScreenshotPreviewDialog(
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(onClick = onDismiss) { Text("关闭") }
+                    OutlinedButton(enabled = annotations.isNotEmpty(), onClick = {
+                        updateAnnotations(annotations.dropLast(1))
+                    }) { Text("撤销") }
+                    OutlinedButton(enabled = annotations.isNotEmpty(), onClick = {
+                        updateAnnotations(emptyList())
+                    }) { Text("清空") }
                     Spacer(Modifier.weight(1f))
-                    OutlinedButton(onClick = onCopy) { Text("复制图片") }
-                    Button(onClick = onSave) { Text("保存本地") }
+                    OutlinedButton(onClick = { onSave(renderedBytes()) }) { Text("保存本地") }
+                    Button(onClick = { onCopy(renderedBytes()) }) { Text("复制图片") }
                 }
             }
         }
     }
 }
+
+private enum class AnnotationTool(val label: String) {
+    ARROW("↗ 红色箭头"), RECTANGLE("□ 红色框");
+
+    fun annotation(start: AnnotationPoint, end: AnnotationPoint): ScreenshotAnnotation = when (this) {
+        ARROW -> ScreenshotAnnotation.Arrow(start, end)
+        RECTANGLE -> ScreenshotAnnotation.Rectangle(start, end)
+    }
+}
+
+internal data class AnnotationPoint(val x: Float, val y: Float)
+
+internal sealed interface ScreenshotAnnotation {
+    val start: AnnotationPoint
+    val end: AnnotationPoint
+
+    data class Arrow(
+        override val start: AnnotationPoint,
+        override val end: AnnotationPoint,
+    ) : ScreenshotAnnotation
+
+    data class Rectangle(
+        override val start: AnnotationPoint,
+        override val end: AnnotationPoint,
+    ) : ScreenshotAnnotation
+}
+
+private data class ImagePlacement(val left: Float, val top: Float, val width: Float, val height: Float)
+
+private const val MIN_ANNOTATION_LENGTH = 3f
+
+private fun imagePlacement(canvasWidth: Float, canvasHeight: Float, imageWidth: Int, imageHeight: Int): ImagePlacement {
+    val scale = min(canvasWidth / imageWidth, canvasHeight / imageHeight)
+    val width = imageWidth * scale
+    val height = imageHeight * scale
+    return ImagePlacement((canvasWidth - width) / 2f, (canvasHeight - height) / 2f, width, height)
+}
+
+private fun imagePointAt(
+    offset: Offset,
+    canvasWidth: Float,
+    canvasHeight: Float,
+    imageWidth: Int,
+    imageHeight: Int,
+    clampToImage: Boolean = false,
+): AnnotationPoint? {
+    val placement = imagePlacement(canvasWidth, canvasHeight, imageWidth, imageHeight)
+    val imageX = (offset.x - placement.left) * imageWidth / placement.width
+    val imageY = (offset.y - placement.top) * imageHeight / placement.height
+    if (!clampToImage && (imageX < 0f || imageY < 0f || imageX > imageWidth || imageY > imageHeight)) return null
+    return AnnotationPoint(imageX.coerceIn(0f, imageWidth.toFloat()), imageY.coerceIn(0f, imageHeight.toFloat()))
+}
+
+private fun ScreenshotAnnotation.length(): Float = hypot(end.x - start.x, end.y - start.y)
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotation(
+    annotation: ScreenshotAnnotation,
+    placement: ImagePlacement,
+    imageWidth: Int,
+    imageHeight: Int,
+) {
+    fun AnnotationPoint.onCanvas() = Offset(
+        placement.left + x * placement.width / imageWidth,
+        placement.top + y * placement.height / imageHeight,
+    )
+
+    val start = annotation.start.onCanvas()
+    val end = annotation.end.onCanvas()
+    val strokeWidth = annotationStrokeWidth(imageWidth, imageHeight) * placement.width / imageWidth
+    when (annotation) {
+        is ScreenshotAnnotation.Rectangle -> drawRect(
+            color = Color.Red,
+            topLeft = Offset(minOf(start.x, end.x), minOf(start.y, end.y)),
+            size = Size(kotlin.math.abs(end.x - start.x), kotlin.math.abs(end.y - start.y)),
+            style = Stroke(strokeWidth),
+        )
+        is ScreenshotAnnotation.Arrow -> {
+            drawLine(Color.Red, start, end, strokeWidth, StrokeCap.Round)
+            val angle = atan2(end.y - start.y, end.x - start.x)
+            val headLength = arrowHeadLength(imageWidth, imageHeight) * placement.width / imageWidth
+            val spread = Math.toRadians(28.0).toFloat()
+            drawLine(
+                Color.Red,
+                end,
+                Offset(end.x - headLength * cos(angle - spread), end.y - headLength * sin(angle - spread)),
+                strokeWidth,
+                StrokeCap.Round,
+            )
+            drawLine(
+                Color.Red,
+                end,
+                Offset(end.x - headLength * cos(angle + spread), end.y - headLength * sin(angle + spread)),
+                strokeWidth,
+                StrokeCap.Round,
+            )
+        }
+    }
+}
+
+internal fun renderAnnotatedScreenshot(bytes: ByteArray, annotations: List<ScreenshotAnnotation>): ByteArray {
+    if (annotations.isEmpty()) return bytes
+    val source = ImageIO.read(ByteArrayInputStream(bytes)) ?: throw IllegalArgumentException("截图格式无效")
+    val output = java.awt.image.BufferedImage(source.width, source.height, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+    val graphics = output.createGraphics()
+    try {
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        graphics.drawImage(source, 0, 0, null)
+        graphics.color = AwtColor.RED
+        val strokeWidth = annotationStrokeWidth(source.width, source.height)
+        graphics.stroke = BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        annotations.forEach { annotation ->
+            when (annotation) {
+                is ScreenshotAnnotation.Rectangle -> graphics.draw(
+                    Rectangle2D.Float(
+                        minOf(annotation.start.x, annotation.end.x),
+                        minOf(annotation.start.y, annotation.end.y),
+                        kotlin.math.abs(annotation.end.x - annotation.start.x),
+                        kotlin.math.abs(annotation.end.y - annotation.start.y),
+                    ),
+                )
+                is ScreenshotAnnotation.Arrow -> {
+                    graphics.draw(Line2D.Float(annotation.start.x, annotation.start.y, annotation.end.x, annotation.end.y))
+                    val angle = atan2(annotation.end.y - annotation.start.y, annotation.end.x - annotation.start.x)
+                    val headLength = arrowHeadLength(source.width, source.height)
+                    val spread = Math.toRadians(28.0).toFloat()
+                    graphics.draw(Line2D.Float(
+                        annotation.end.x,
+                        annotation.end.y,
+                        annotation.end.x - headLength * cos(angle - spread),
+                        annotation.end.y - headLength * sin(angle - spread),
+                    ))
+                    graphics.draw(Line2D.Float(
+                        annotation.end.x,
+                        annotation.end.y,
+                        annotation.end.x - headLength * cos(angle + spread),
+                        annotation.end.y - headLength * sin(angle + spread),
+                    ))
+                }
+            }
+        }
+    } finally {
+        graphics.dispose()
+    }
+    return ByteArrayOutputStream().use { stream ->
+        check(ImageIO.write(output, "png", stream)) { "无法编码标注截图" }
+        stream.toByteArray()
+    }
+}
+
+private fun annotationStrokeWidth(imageWidth: Int, imageHeight: Int): Float =
+    (min(imageWidth, imageHeight) * 0.005f).coerceIn(4f, 12f)
+
+private fun arrowHeadLength(imageWidth: Int, imageHeight: Int): Float =
+    (min(imageWidth, imageHeight) * 0.035f).coerceIn(18f, 56f)
 
 private fun copyImageToClipboard(bytes: ByteArray) {
     val image = ImageIO.read(ByteArrayInputStream(bytes)) ?: throw IllegalArgumentException("截图格式无效")

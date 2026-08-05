@@ -1,12 +1,20 @@
 package com.apkharden.packager.device
 
+import java.awt.Color
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import javax.imageio.ImageIO
+import org.jcodec.api.awt.AWTSequenceEncoder
 
 internal data class AndroidDevice(
     val serial: String,
@@ -34,6 +42,81 @@ internal data class IntentLaunchRequest(
     val component: String = "",
     val categories: List<String> = listOf("android.intent.category.BROWSABLE"),
 )
+
+internal enum class ScreenRecordingMode {
+    DEVICE,
+    SCRCPY,
+    SCREENSHOT_COMPATIBILITY,
+}
+
+private const val COMPATIBILITY_RECORDING_FPS = 4
+private const val COMPATIBILITY_RECORDING_MAX_EDGE = 1280
+
+internal fun isScreenRecordUnavailable(error: Throwable): Boolean =
+    generateSequence(error) { it.cause }.mapNotNull(Throwable::message).any { message ->
+        val normalized = message.lowercase()
+        normalized.contains("screenrecord: inaccessible or not found") ||
+            normalized.contains("screenrecord: not found") ||
+            normalized.contains("screenrecord: no such file or directory")
+    }
+
+internal fun buildScrcpyRecordingArgs(serial: String, output: File, seconds: Int): List<String> {
+    require(serial.isNotBlank()) { "设备序列号不能为空" }
+    require(seconds in 1..180) { "录屏时长必须为 1～180 秒" }
+    return listOf(
+        "--serial", serial,
+        "--record", output.absolutePath,
+        "--time-limit", seconds.toString(),
+        "--no-window",
+        "--no-audio",
+        "--no-control",
+        "--no-clipboard-autosync",
+        "--max-fps", "30",
+    )
+}
+
+internal fun normalizeRecordingFrame(
+    source: BufferedImage,
+    targetWidth: Int? = null,
+    targetHeight: Int? = null,
+): BufferedImage {
+    require(source.width > 0 && source.height > 0) { "录屏帧尺寸无效" }
+    val scale = minOf(1.0, COMPATIBILITY_RECORDING_MAX_EDGE.toDouble() / maxOf(source.width, source.height))
+    val width = targetWidth ?: ((source.width * scale).toInt().coerceAtLeast(2) / 2 * 2)
+    val height = targetHeight ?: ((source.height * scale).toInt().coerceAtLeast(2) / 2 * 2)
+    require(width > 0 && height > 0 && width % 2 == 0 && height % 2 == 0) { "录屏输出尺寸必须为正偶数" }
+
+    val output = BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR)
+    val graphics = output.createGraphics()
+    try {
+        graphics.color = Color.BLACK
+        graphics.fillRect(0, 0, width, height)
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+        val fitScale = minOf(width.toDouble() / source.width, height.toDouble() / source.height)
+        val drawWidth = (source.width * fitScale).toInt().coerceAtLeast(1)
+        val drawHeight = (source.height * fitScale).toInt().coerceAtLeast(1)
+        val left = (width - drawWidth) / 2
+        val top = (height - drawHeight) / 2
+        graphics.drawImage(source, left, top, drawWidth, drawHeight, null)
+    } finally {
+        graphics.dispose()
+    }
+    return output
+}
+
+internal fun encodeRecordingFrames(frames: Iterable<BufferedImage>, output: File, fps: Int) {
+    require(fps > 0) { "录屏帧率必须大于 0" }
+    output.parentFile?.mkdirs()
+    val iterator = frames.iterator()
+    require(iterator.hasNext()) { "没有可编码的录屏帧" }
+    val encoder = AWTSequenceEncoder.createSequenceEncoder(output, fps)
+    do {
+        encoder.encodeImage(iterator.next())
+    } while (iterator.hasNext())
+    encoder.finish()
+    require(output.isFile && output.length() > 0) { "兼容录屏文件生成失败" }
+}
 
 internal fun buildStartIntentArgs(request: IntentLaunchRequest): List<String> {
     require(request.action.isNotBlank()) { "Intent Action 不能为空" }
@@ -220,17 +303,111 @@ internal object AdbDeviceService {
         return bytes
     }
 
-    fun recordScreen(device: AndroidDevice, output: File, seconds: Int = 15) {
+    fun recordScreen(device: AndroidDevice, output: File, seconds: Int = 15): ScreenRecordingMode {
         require(seconds in 1..180) { "录屏时长必须为 1～180 秒" }
         val remote = "/sdcard/apkharden-${System.currentTimeMillis()}.mp4"
         try {
-            runAdb(listOf("-s", device.serial, "shell", "screenrecord", "--time-limit", seconds.toString(), remote), seconds.toLong() + 20)
+            try {
+                runAdb(
+                    listOf("-s", device.serial, "shell", "screenrecord", "--time-limit", seconds.toString(), remote),
+                    seconds.toLong() + 20,
+                )
+            } catch (error: IllegalStateException) {
+                if (!isScreenRecordUnavailable(error)) throw error
+                val scrcpy = scrcpyExecutable()
+                if (scrcpy != null) {
+                    val recorded = runCatching { recordScreenWithScrcpy(scrcpy, device, output, seconds) }
+                    if (recorded.isSuccess) return ScreenRecordingMode.SCRCPY
+                }
+                recordScreenFromScreenshots(device, output, seconds)
+                return ScreenRecordingMode.SCREENSHOT_COMPATIBILITY
+            }
             output.parentFile?.mkdirs()
             runAdb(listOf("-s", device.serial, "pull", remote, output.absolutePath), 120)
             require(output.isFile && output.length() > 0) { "录屏文件拉取失败" }
+            return ScreenRecordingMode.DEVICE
         } finally {
             runCatching { shell(device.serial, "rm", "-f", remote) }
         }
+    }
+
+    private fun recordScreenWithScrcpy(
+        executable: File,
+        device: AndroidDevice,
+        output: File,
+        seconds: Int,
+    ) {
+        output.parentFile?.mkdirs()
+        val parent = output.parentFile ?: File(System.getProperty("java.io.tmpdir"))
+        val temporary = File.createTempFile("apkharden-scrcpy-", ".mp4", parent).apply { delete() }
+        try {
+            val command = listOf(executable.absolutePath) +
+                buildScrcpyRecordingArgs(device.serial, temporary, seconds)
+            val process = ProcessBuilder(command)
+                .directory(executable.parentFile)
+                .redirectErrorStream(true)
+                .start()
+            val captured = AtomicReference("")
+            val reader = Thread {
+                captured.set(process.inputStream.bufferedReader().use { it.readText() })
+            }.apply { isDaemon = true; start() }
+            if (!process.waitFor(seconds.toLong() + 30, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                throw IllegalStateException("scrcpy 录屏超时")
+            }
+            reader.join(5_000)
+            if (process.exitValue() != 0) {
+                throw IllegalStateException(captured.get().trim().ifBlank { "scrcpy 录屏失败" })
+            }
+            require(temporary.isFile && temporary.length() > 0) { "scrcpy 没有生成录屏文件" }
+            Files.move(temporary.toPath(), output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            Files.deleteIfExists(temporary.toPath())
+        }
+        require(output.isFile && output.length() > 0) { "scrcpy 录屏文件保存失败" }
+    }
+
+    private fun recordScreenFromScreenshots(device: AndroidDevice, output: File, seconds: Int) {
+        output.parentFile?.mkdirs()
+        val parent = output.parentFile ?: File(System.getProperty("java.io.tmpdir"))
+        val temporary = File.createTempFile("apkharden-screenrecord-", ".mp4", parent)
+        try {
+            val firstSource = ImageIO.read(ByteArrayInputStream(captureScreenshot(device)))
+                ?: throw IllegalStateException("设备截图格式无效，无法启动兼容录屏")
+            var latest = normalizeRecordingFrame(firstSource)
+            val targetWidth = latest.width
+            val targetHeight = latest.height
+            val totalFrames = seconds * COMPATIBILITY_RECORDING_FPS
+            val frameIntervalNanos = TimeUnit.SECONDS.toNanos(1) / COMPATIBILITY_RECORDING_FPS
+            val startedAt = System.nanoTime()
+            var encodedFrames = 0
+            val encoder = AWTSequenceEncoder.createSequenceEncoder(temporary, COMPATIBILITY_RECORDING_FPS)
+            try {
+                encoder.encodeImage(latest)
+                encodedFrames++
+                while (encodedFrames < totalFrames) {
+                    val targetTime = startedAt + encodedFrames * frameIntervalNanos
+                    val remaining = targetTime - System.nanoTime()
+                    if (remaining > 0) {
+                        TimeUnit.NANOSECONDS.sleep(remaining)
+                    }
+                    if (System.nanoTime() - startedAt < TimeUnit.SECONDS.toNanos(seconds.toLong())) {
+                        val source = ImageIO.read(ByteArrayInputStream(captureScreenshot(device)))
+                            ?: throw IllegalStateException("设备返回了无效的录屏帧")
+                        latest = normalizeRecordingFrame(source, targetWidth, targetHeight)
+                    }
+                    encoder.encodeImage(latest)
+                    encodedFrames++
+                }
+            } finally {
+                encoder.finish()
+            }
+            require(temporary.isFile && temporary.length() > 0) { "兼容录屏文件生成失败" }
+            Files.move(temporary.toPath(), output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            Files.deleteIfExists(temporary.toPath())
+        }
+        require(output.isFile && output.length() > 0) { "兼容录屏文件保存失败" }
     }
 
     private fun shell(serial: String, vararg args: String): String =
@@ -276,5 +453,16 @@ internal object AdbDeviceService {
             File("C:/AndroidSdk/platform-tools/adb.exe"),
         )
         return candidates.firstOrNull(File::isFile)?.absolutePath ?: "adb"
+    }
+
+    private fun scrcpyExecutable(): File? {
+        val configured = System.getProperty("apkharden.scrcpy.path")?.takeIf(String::isNotBlank)
+            ?: System.getenv("APK_HARDEN_SCRCPY")?.takeIf(String::isNotBlank)
+        val resources = System.getProperty("compose.application.resources.dir")?.takeIf(String::isNotBlank)
+        return listOfNotNull(
+            configured?.let(::File),
+            resources?.let { File(it, "scrcpy/scrcpy.exe") },
+            File(System.getProperty("user.dir"), "scrcpy/scrcpy.exe"),
+        ).firstOrNull(File::isFile)
     }
 }

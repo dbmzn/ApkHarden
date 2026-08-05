@@ -20,7 +20,7 @@
 - **Manifest 查看器**：图形化查看权限、Activity/Service/Receiver/Provider、进程、启动 Activity 与 Deep Link，支持搜索和导出风险标记
 - **APK 文件浏览器**：按 DEX、Native、资源、Assets 等分类浏览包内文件，展示目录大小占比和大文件排行
 - **包体积分析**：比较两个 APK 的模块增量和具体文件增减，直接定位 SO、DEX、资源等体积来源
-- **ADB 工具箱**：提供日志过滤、截图预览/复制/保存、录屏、性能快照、Intent / Deep Link 调试、崩溃与 ANR 采集包、权限授予、应用数据清理、进程和页面栈查看；截图与录屏自动使用时间命名，诊断包会把设备、应用、CPU、内存、页面栈、Crash buffer、last ANR 与 DropBox 信息打包到 `Downloads`，清数据操作会二次确认
+- **ADB 工具箱**：提供日志过滤、截图预览/复制/保存、录屏、性能快照、Intent / Deep Link 调试、崩溃与 ANR 采集包、权限授予、应用数据清理、进程和页面栈查看；截图与录屏自动使用时间命名，缺少系统 `screenrecord` 的设备会自动切换到随桌面版部署的 scrcpy 高帧率录制，连续截图编码仅作为最后保底，诊断包会把设备、应用、CPU、内存、页面栈、Crash buffer、last ANR 与 DropBox 信息打包到 `Downloads`，清数据操作会二次确认
 
 加固产物支持 minSdk 23（Android 6.0）+。APK 加固、签名和静态分析全程使用纯 JVM 库（[apksig](https://android.googlesource.com/platform/tools/apksig/) 签名 + [ARSCLib](https://github.com/REAndroid/ARSCLib) 修改 Manifest），不依赖业务工程，也不要求安装 Android SDK；设备安装验证和 ADB 工具箱需要本机能够执行 `adb`。
 
