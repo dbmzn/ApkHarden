@@ -4,6 +4,7 @@ import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.time.LocalDateTime
 import javax.imageio.ImageIO
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -31,6 +32,33 @@ class AdbToolboxScreenTest {
 
         assertEquals("ApkHarden-diagnostics-20260716-164508.zip", file.name)
         assertTrue(file.parentFile.absolutePath.endsWith("Downloads"))
+    }
+
+    @Test
+    fun `recording feedback counts down and switches to saving state`() {
+        assertEquals("录屏 15 秒", recordingButtonLabel(null))
+        assertEquals("录屏中 15s", recordingButtonLabel(15))
+        assertEquals("录屏中 1s", recordingButtonLabel(1))
+        assertEquals("正在保存 MP4…", recordingButtonLabel(0))
+        assertEquals("正在录屏，剩余 15s，请勿断开设备…", recordingStatusMessage(15))
+        assertEquals("录制结束，正在保存 MP4…", recordingStatusMessage(0))
+    }
+
+    @Test
+    fun `recording progress covers countdown range`() {
+        assertEquals(0f, recordingProgress(15))
+        assertEquals(0.5f, recordingProgress(7, totalSeconds = 14))
+        assertEquals(1f, recordingProgress(0))
+    }
+
+    @Test
+    fun `recording output can be selected in Windows Explorer`() {
+        val file = File("C:\\Users\\tester\\Downloads\\recording sample.mp4")
+
+        assertEquals(
+            listOf("explorer.exe", "/select,C:\\Users\\tester\\Downloads\\recording sample.mp4"),
+            windowsRevealFileCommand(file),
+        )
     }
 
     @Test

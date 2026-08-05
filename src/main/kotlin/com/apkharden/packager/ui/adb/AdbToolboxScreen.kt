@@ -35,6 +35,8 @@ import com.apkharden.packager.ui.inspect.PageTitle
 import com.apkharden.packager.ui.inspect.ValueCard
 import com.apkharden.packager.ui.theme.LocalSemantic
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -42,6 +44,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.awt.BasicStroke
 import java.awt.Color as AwtColor
+import java.awt.Desktop
 import java.awt.RenderingHints
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
@@ -65,6 +68,25 @@ internal enum class AdbTab(val label: String) {
 }
 
 internal val DEFAULT_ADB_TAB = AdbTab.CAPTURE
+internal const val DEFAULT_RECORDING_SECONDS = 15
+
+internal fun recordingButtonLabel(remainingSeconds: Int?): String = when {
+    remainingSeconds == null -> "录屏 $DEFAULT_RECORDING_SECONDS 秒"
+    remainingSeconds > 0 -> "录屏中 ${remainingSeconds}s"
+    else -> "正在保存 MP4…"
+}
+
+internal fun recordingStatusMessage(remainingSeconds: Int): String =
+    if (remainingSeconds > 0) "正在录屏，剩余 ${remainingSeconds}s，请勿断开设备…"
+    else "录制结束，正在保存 MP4…"
+
+internal fun recordingProgress(
+    remainingSeconds: Int,
+    totalSeconds: Int = DEFAULT_RECORDING_SECONDS,
+): Float {
+    require(totalSeconds > 0) { "totalSeconds must be positive" }
+    return ((totalSeconds - remainingSeconds).toFloat() / totalSeconds).coerceIn(0f, 1f)
+}
 
 @Composable
 fun AdbToolboxScreen() {
@@ -85,6 +107,8 @@ fun AdbToolboxScreen() {
     var confirmClear by remember { mutableStateOf(false) }
     var screenshotPreview by remember { mutableStateOf<ByteArray?>(null) }
     var previewStatus by remember { mutableStateOf<String?>(null) }
+    var recordingRemainingSeconds by remember { mutableStateOf<Int?>(null) }
+    var recordingOutputFile by remember { mutableStateOf<File?>(null) }
     val scope = rememberCoroutineScope()
     val sem = LocalSemantic.current
 
@@ -99,7 +123,7 @@ fun AdbToolboxScreen() {
     }
     fun runAction(message: String, action: (AndroidDevice) -> String) {
         val device = devices.firstOrNull { it.serial == serial } ?: return
-        running = true; error = null; output = message
+        running = true; error = null; output = message; recordingOutputFile = null
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { action(device) } }
                 .onSuccess { output = it }.onFailure { error = friendly(it) }
@@ -163,7 +187,7 @@ fun AdbToolboxScreen() {
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AdbTab.entries.forEach { item ->
-                OutlinedButton(onClick = { tab = item; output = ""; error = null },
+                OutlinedButton(onClick = { tab = item; output = ""; error = null; recordingOutputFile = null },
                     colors = ButtonDefaults.outlinedButtonColors(backgroundColor = if (tab == item) MaterialTheme.colors.primary.copy(alpha = .14f) else MaterialTheme.colors.surface)) {
                     Text(item.label)
                 }
@@ -185,7 +209,7 @@ fun AdbToolboxScreen() {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.weight(1f), onClick = {
                         val device = devices.firstOrNull { it.serial == serial } ?: return@Button
-                        running = true; error = null; output = "正在截取设备屏幕…"
+                        running = true; error = null; output = "正在截取设备屏幕…"; recordingOutputFile = null
                         scope.launch {
                             runCatching { withContext(Dispatchers.IO) { AdbDeviceService.captureScreenshot(device) } }
                                 .onSuccess { bytes ->
@@ -197,18 +221,64 @@ fun AdbToolboxScreen() {
                         }
                     }) { Text("设备截图") }
                     Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.weight(1f), onClick = {
+                        val device = devices.firstOrNull { it.serial == serial } ?: return@Button
                         val file = captureFile("screenrecord", "mp4")
-                        runAction("正在录屏 15 秒，请勿断开设备…") { device ->
-                            val mode = AdbDeviceService.recordScreen(device, file, 15)
-                            val modeLabel = when (mode) {
-                                com.apkharden.packager.device.ScreenRecordingMode.DEVICE -> "设备原生模式"
-                                com.apkharden.packager.device.ScreenRecordingMode.SCRCPY -> "高帧率兼容模式（最高 30 FPS）"
-                                com.apkharden.packager.device.ScreenRecordingMode.SCREENSHOT_COMPATIBILITY ->
-                                    "低帧率保底模式（4 FPS）"
+                        running = true
+                        error = null
+                        recordingOutputFile = null
+                        recordingRemainingSeconds = DEFAULT_RECORDING_SECONDS
+                        output = recordingStatusMessage(DEFAULT_RECORDING_SECONDS)
+                        scope.launch {
+                            val recording = async(Dispatchers.IO) {
+                                runCatching {
+                                    val mode = AdbDeviceService.recordScreen(device, file, DEFAULT_RECORDING_SECONDS)
+                                    val modeLabel = when (mode) {
+                                        com.apkharden.packager.device.ScreenRecordingMode.DEVICE -> "设备原生模式"
+                                        com.apkharden.packager.device.ScreenRecordingMode.SCRCPY -> "高帧率兼容模式（最高 30 FPS）"
+                                        com.apkharden.packager.device.ScreenRecordingMode.SCREENSHOT_COMPATIBILITY ->
+                                            "低帧率保底模式（4 FPS）"
+                                    }
+                                    "录屏已保存（$modeLabel）：${file.absolutePath}"
+                                }
                             }
-                            "录屏已保存（$modeLabel）：${file.absolutePath}"
+                            try {
+                                var remaining = DEFAULT_RECORDING_SECONDS
+                                while (!recording.isCompleted && remaining > 0) {
+                                    delay(1_000)
+                                    if (!recording.isCompleted) {
+                                        remaining--
+                                        recordingRemainingSeconds = remaining
+                                        output = recordingStatusMessage(remaining)
+                                    }
+                                }
+                                recording.await()
+                                    .onSuccess {
+                                        output = it
+                                        recordingOutputFile = file
+                                    }
+                                    .onFailure {
+                                        output = ""
+                                        error = friendly(it)
+                                    }
+                            } finally {
+                                recordingRemainingSeconds = null
+                                running = false
+                            }
                         }
-                    }) { Text("录屏 15 秒") }
+                    }) { Text(recordingButtonLabel(recordingRemainingSeconds)) }
+                }
+                recordingRemainingSeconds?.let { remaining ->
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        progress = recordingProgress(remaining),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Text(
+                        recordingStatusMessage(remaining),
+                        color = MaterialTheme.colors.primary,
+                        style = MaterialTheme.typography.body2,
+                    )
                 }
             }
             AdbTab.PERFORMANCE -> ValueCard {
@@ -296,6 +366,14 @@ fun AdbToolboxScreen() {
                 Text("输出", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(8.dp))
                 Text(output, style = MaterialTheme.typography.caption.copy(fontFamily = FontFamily.Monospace), color = sem.subtle)
+                recordingOutputFile?.let { file ->
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(onClick = {
+                        error = null
+                        runCatching { revealFileInFolder(file) }
+                            .onFailure { error = "无法打开文件夹：${friendly(it)}" }
+                    }) { Text("打开所在文件夹") }
+                }
             }
         }
     }
@@ -326,6 +404,19 @@ private val CAPTURE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 internal fun captureFile(kind: String, extension: String, now: LocalDateTime = LocalDateTime.now()): File {
     val downloads = File(System.getProperty("user.home"), "Downloads").apply { mkdirs() }
     return File(downloads, "ApkHarden-$kind-${now.format(CAPTURE_TIME)}.$extension")
+}
+
+internal fun windowsRevealFileCommand(file: File): List<String> =
+    listOf("explorer.exe", "/select,${file.absolutePath}")
+
+private fun revealFileInFolder(file: File) {
+    require(file.isFile) { "文件不存在：${file.absolutePath}" }
+    if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+        ProcessBuilder(windowsRevealFileCommand(file)).start()
+    } else {
+        require(Desktop.isDesktopSupported()) { "当前系统不支持打开文件夹" }
+        Desktop.getDesktop().open(file.parentFile)
+    }
 }
 
 @Composable
