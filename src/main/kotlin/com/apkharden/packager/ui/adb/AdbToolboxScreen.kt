@@ -68,10 +68,14 @@ internal enum class AdbTab(val label: String) {
 }
 
 internal val DEFAULT_ADB_TAB = AdbTab.CAPTURE
-internal const val DEFAULT_RECORDING_SECONDS = 15
+internal val RECORDING_DURATION_OPTIONS = listOf(5, 10, 15)
+internal const val DEFAULT_RECORDING_SECONDS = 10
 
-internal fun recordingButtonLabel(remainingSeconds: Int?): String = when {
-    remainingSeconds == null -> "录屏 $DEFAULT_RECORDING_SECONDS 秒"
+internal fun recordingButtonLabel(
+    remainingSeconds: Int?,
+    totalSeconds: Int = DEFAULT_RECORDING_SECONDS,
+): String = when {
+    remainingSeconds == null -> "录屏 $totalSeconds 秒"
     remainingSeconds > 0 -> "录屏中 ${remainingSeconds}s"
     else -> "正在保存 MP4…"
 }
@@ -107,6 +111,7 @@ fun AdbToolboxScreen() {
     var confirmClear by remember { mutableStateOf(false) }
     var screenshotPreview by remember { mutableStateOf<ByteArray?>(null) }
     var previewStatus by remember { mutableStateOf<String?>(null) }
+    var recordingSeconds by remember { mutableStateOf(DEFAULT_RECORDING_SECONDS) }
     var recordingRemainingSeconds by remember { mutableStateOf<Int?>(null) }
     var recordingOutputFile by remember { mutableStateOf<File?>(null) }
     val scope = rememberCoroutineScope()
@@ -204,7 +209,29 @@ fun AdbToolboxScreen() {
                 }) { Text("读取最近 800 行日志") }
             }
             AdbTab.CAPTURE -> ValueCard {
-                Text("截图保存为 PNG；录屏默认 15 秒并保存为 MP4。", color = sem.subtle, style = MaterialTheme.typography.body2)
+                Text("截图保存为 PNG；录屏可选 5、10 或 15 秒并保存为 MP4。", color = sem.subtle, style = MaterialTheme.typography.body2)
+                Spacer(Modifier.height(10.dp))
+                Text("录制时长", color = sem.subtle, style = MaterialTheme.typography.body2)
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RECORDING_DURATION_OPTIONS.forEach { seconds ->
+                        OutlinedButton(
+                            enabled = !running,
+                            modifier = Modifier.weight(1f),
+                            onClick = { recordingSeconds = seconds },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                backgroundColor = if (recordingSeconds == seconds) {
+                                    MaterialTheme.colors.primary.copy(alpha = .14f)
+                                } else {
+                                    MaterialTheme.colors.surface
+                                },
+                            ),
+                        ) { Text("$seconds 秒") }
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.weight(1f), onClick = {
@@ -223,15 +250,16 @@ fun AdbToolboxScreen() {
                     Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.weight(1f), onClick = {
                         val device = devices.firstOrNull { it.serial == serial } ?: return@Button
                         val file = captureFile("screenrecord", "mp4")
+                        val selectedRecordingSeconds = recordingSeconds
                         running = true
                         error = null
                         recordingOutputFile = null
-                        recordingRemainingSeconds = DEFAULT_RECORDING_SECONDS
-                        output = recordingStatusMessage(DEFAULT_RECORDING_SECONDS)
+                        recordingRemainingSeconds = selectedRecordingSeconds
+                        output = recordingStatusMessage(selectedRecordingSeconds)
                         scope.launch {
                             val recording = async(Dispatchers.IO) {
                                 runCatching {
-                                    val mode = AdbDeviceService.recordScreen(device, file, DEFAULT_RECORDING_SECONDS)
+                                    val mode = AdbDeviceService.recordScreen(device, file, selectedRecordingSeconds)
                                     val modeLabel = when (mode) {
                                         com.apkharden.packager.device.ScreenRecordingMode.DEVICE -> "设备原生模式"
                                         com.apkharden.packager.device.ScreenRecordingMode.SCRCPY -> "高帧率兼容模式（最高 30 FPS）"
@@ -242,7 +270,7 @@ fun AdbToolboxScreen() {
                                 }
                             }
                             try {
-                                var remaining = DEFAULT_RECORDING_SECONDS
+                                var remaining = selectedRecordingSeconds
                                 while (!recording.isCompleted && remaining > 0) {
                                     delay(1_000)
                                     if (!recording.isCompleted) {
@@ -265,12 +293,12 @@ fun AdbToolboxScreen() {
                                 running = false
                             }
                         }
-                    }) { Text(recordingButtonLabel(recordingRemainingSeconds)) }
+                    }) { Text(recordingButtonLabel(recordingRemainingSeconds, recordingSeconds)) }
                 }
                 recordingRemainingSeconds?.let { remaining ->
                     Spacer(Modifier.height(12.dp))
                     LinearProgressIndicator(
-                        progress = recordingProgress(remaining),
+                        progress = recordingProgress(remaining, recordingSeconds),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(7.dp))

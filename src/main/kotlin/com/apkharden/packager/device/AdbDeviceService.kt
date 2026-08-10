@@ -303,7 +303,7 @@ internal object AdbDeviceService {
         return bytes
     }
 
-    fun recordScreen(device: AndroidDevice, output: File, seconds: Int = 15): ScreenRecordingMode {
+    fun recordScreen(device: AndroidDevice, output: File, seconds: Int = 10): ScreenRecordingMode {
         require(seconds in 1..180) { "录屏时长必须为 1～180 秒" }
         val remote = "/sdcard/apkharden-${System.currentTimeMillis()}.mp4"
         try {

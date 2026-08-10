@@ -78,7 +78,7 @@ app-hardened-report.json
 |---|---|
 | 日志过滤 | 可按包名限定当前进程，并按关键字过滤最近 800 行日志 |
 | 设备截图 | 截图后在当前应用中预览；可复制到剪贴板或保存到 `Downloads` |
-| 设备录屏 | 默认录制 15 秒并自动保存到 `Downloads` |
+| 设备录屏 | 可选录制 5、10 或 15 秒（默认 10 秒），并自动保存到 `Downloads` |
 | 性能快照 | 输入包名后一次采集目标进程 PID、CPU、内存和界面渲染数据 |
 | Intent / Deep Link | 配置 Action、URI、包名、组件和 Category，通过 `am start -W` 返回启动状态与耗时 |
 | 崩溃与 ANR | 输入包名后生成包含设备、应用、进程、页面栈、CPU、内存、日志、Crash buffer、last ANR 和 DropBox 的 ZIP |

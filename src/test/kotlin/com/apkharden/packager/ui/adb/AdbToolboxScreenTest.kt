@@ -36,7 +36,9 @@ class AdbToolboxScreenTest {
 
     @Test
     fun `recording feedback counts down and switches to saving state`() {
-        assertEquals("录屏 15 秒", recordingButtonLabel(null))
+        assertEquals(listOf(5, 10, 15), RECORDING_DURATION_OPTIONS)
+        assertEquals("录屏 10 秒", recordingButtonLabel(null))
+        assertEquals("录屏 5 秒", recordingButtonLabel(null, totalSeconds = 5))
         assertEquals("录屏中 15s", recordingButtonLabel(15))
         assertEquals("录屏中 1s", recordingButtonLabel(1))
         assertEquals("正在保存 MP4…", recordingButtonLabel(0))
@@ -46,7 +48,8 @@ class AdbToolboxScreenTest {
 
     @Test
     fun `recording progress covers countdown range`() {
-        assertEquals(0f, recordingProgress(15))
+        assertEquals(0f, recordingProgress(10))
+        assertEquals(0.5f, recordingProgress(5))
         assertEquals(0.5f, recordingProgress(7, totalSeconds = 14))
         assertEquals(1f, recordingProgress(0))
     }
