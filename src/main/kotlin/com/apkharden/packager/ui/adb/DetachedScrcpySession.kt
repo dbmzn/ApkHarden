@@ -5,6 +5,7 @@ import com.apkharden.packager.device.AndroidDevice
 import com.apkharden.packager.device.buildScrcpyMirrorArgs
 import com.apkharden.packager.device.fitMirrorWindow
 import com.sun.jna.platform.win32.User32
+import com.sun.jna.platform.win32.WinDef.HWND
 import java.awt.GraphicsEnvironment
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -112,9 +113,7 @@ internal class DetachedScrcpySession {
                 }
             }, "apkharden-detached-device-mirror-output").apply { isDaemon = true; start() }
 
-            val window = waitForMirrorWindow(title, launched, currentGeneration)
-            User32.INSTANCE.ShowWindow(window, 5)
-            User32.INSTANCE.SetForegroundWindow(window)
+            waitForStableMirrorWindow(title, launched, currentGeneration)
             status(
                 MirrorPhase.RUNNING,
                 "独立镜像窗口已铺满一屏：${windowSize.width} × ${windowSize.height}" +
@@ -146,16 +145,24 @@ internal class DetachedScrcpySession {
         }
     }
 
-    private fun waitForMirrorWindow(title: String, launched: Process, currentGeneration: Long) =
-        generateSequence(0) { it + 1 }
-            .take(150)
-            .mapNotNull {
-                if (!isCurrent(currentGeneration)) throw IllegalStateException("镜像启动已取消")
-                if (!launched.isAlive) throw IllegalStateException("scrcpy 启动失败")
-                User32.INSTANCE.FindWindow(null, title).also { if (it == null) Thread.sleep(100) }
+    private fun waitForStableMirrorWindow(title: String, launched: Process, currentGeneration: Long) {
+        var previousWindow: HWND? = null
+        var stableSamples = 0
+        repeat(150) {
+            if (!isCurrent(currentGeneration)) throw IllegalStateException("镜像启动已取消")
+            if (!launched.isAlive) throw IllegalStateException("scrcpy 启动失败")
+            val currentWindow = User32.INSTANCE.FindWindow(null, title)
+            if (currentWindow != null && currentWindow == previousWindow) {
+                stableSamples++
+                if (stableSamples >= 5) return
+            } else {
+                previousWindow = currentWindow
+                stableSamples = if (currentWindow == null) 0 else 1
             }
-            .firstOrNull()
-            ?: throw IllegalStateException("等待 scrcpy 镜像窗口超时")
+            Thread.sleep(100)
+        }
+        throw IllegalStateException("等待 scrcpy 镜像窗口稳定超时")
+    }
 
     private fun isCurrent(value: Long): Boolean = generation == value && requestedSerial != null
 
