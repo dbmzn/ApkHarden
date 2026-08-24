@@ -63,7 +63,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 internal enum class AdbTab(val label: String) {
-    CAPTURE("截图与录屏"), LOG("日志过滤"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
+    CAPTURE("截图与录屏"), MIRROR("实时镜像"), LOG("日志过滤"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
     DIAGNOSTICS("崩溃与 ANR"), APP("应用操作"), PROCESS("进程与页面栈")
 }
 
@@ -114,6 +114,7 @@ fun AdbToolboxScreen() {
     var recordingSeconds by remember { mutableStateOf(DEFAULT_RECORDING_SECONDS) }
     var recordingRemainingSeconds by remember { mutableStateOf<Int?>(null) }
     var recordingOutputFile by remember { mutableStateOf<File?>(null) }
+    val mirrorSession = remember { DetachedScrcpySession() }
     val scope = rememberCoroutineScope()
     val sem = LocalSemantic.current
 
@@ -136,6 +137,10 @@ fun AdbToolboxScreen() {
         }
     }
     LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(serial) {
+        mirrorSession.stop(if (serial.isBlank()) "选择在线设备后开始镜像" else "设备已切换，请重新开始镜像")
+    }
+    DisposableEffect(mirrorSession) { onDispose(mirrorSession::close) }
 
     if (confirmClear) {
         AlertDialog(
@@ -199,6 +204,10 @@ fun AdbToolboxScreen() {
             }
         }
         when (tab) {
+            AdbTab.MIRROR -> DeviceMirrorCard(
+                device = devices.firstOrNull { it.serial == serial },
+                session = mirrorSession,
+            )
             AdbTab.LOG -> ValueCard {
                 CommonPackageField(packageName) { packageName = it }
                 Spacer(Modifier.height(8.dp))
@@ -404,6 +413,85 @@ fun AdbToolboxScreen() {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DeviceMirrorCard(device: AndroidDevice?, session: DetachedScrcpySession) {
+    val initialStatus = remember(session, device?.serial) { session.statusSnapshot() }
+    var phase by remember(session, device?.serial) { mutableStateOf(initialStatus.phase) }
+    var status by remember(session, device?.serial) { mutableStateOf(initialStatus.message) }
+    LaunchedEffect(session, device?.serial) {
+        while (true) {
+            session.statusSnapshot().let {
+                phase = it.phase
+                status = it.message
+            }
+            delay(100)
+        }
+    }
+    val requested = phase == MirrorPhase.STARTING || phase == MirrorPhase.RUNNING
+
+    ValueCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("设备实时镜像", style = MaterialTheme.typography.subtitle1)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "连接成功后按设备比例放大到当前电脑一屏刚好容纳。",
+                    color = LocalSemantic.current.subtle,
+                    style = MaterialTheme.typography.body2,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Button(
+                enabled = device?.state == "device" && (requested || phase != MirrorPhase.STARTING),
+                onClick = {
+                    if (requested) {
+                        phase = MirrorPhase.IDLE
+                        status = "镜像已停止"
+                        session.stop()
+                    } else {
+                        val selected = device ?: return@Button
+                        phase = MirrorPhase.STARTING
+                        status = "正在连接 ${selected.model}…"
+                        session.start(selected)
+                    }
+                },
+            ) {
+                Text(if (requested) "停止镜像" else if (phase == MirrorPhase.ERROR) "重新连接" else "开始镜像")
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        val statusColor = when (phase) {
+            MirrorPhase.RUNNING -> Color(0xFF34C780)
+            MirrorPhase.ERROR -> MaterialTheme.colors.error
+            MirrorPhase.STARTING -> MaterialTheme.colors.primary
+            MirrorPhase.IDLE -> LocalSemantic.current.subtle
+        }
+        Text(status, color = statusColor, style = MaterialTheme.typography.body2)
+        Spacer(Modifier.height(10.dp))
+        Box(
+            Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp))
+                .background(Color.Black)
+                .border(1.dp, LocalSemantic.current.cardBorder, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                when {
+                    device == null -> "未发现在线设备"
+                    phase == MirrorPhase.RUNNING -> "镜像正在独立窗口中运行\n已按可用屏幕最大尺寸展示，不会超出任务栏和桌面"
+                    else -> "点击“开始镜像”连接 ${device.model}\n成功后将按设备比例铺满当前可用屏幕"
+                },
+                color = Color(0xFF8D96A8),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "快捷操作：右键返回，Ctrl+H 回到桌面，Ctrl+S 切换最近任务；切换工具标签保持连接，离开 ADB 工具箱才会断开。",
+            color = LocalSemantic.current.subtle,
+            style = MaterialTheme.typography.caption,
+        )
     }
 }
 

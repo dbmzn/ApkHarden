@@ -13,8 +13,9 @@ import org.junit.jupiter.api.Test
 
 class AdbToolboxScreenTest {
     @Test
-    fun `capture tools have the highest toolbox priority`() {
+    fun `capture is the default and live mirror is the second toolbox tab`() {
         assertEquals(AdbTab.CAPTURE, AdbTab.entries.first())
+        assertEquals(AdbTab.MIRROR, AdbTab.entries[1])
         assertEquals(AdbTab.CAPTURE, DEFAULT_ADB_TAB)
     }
 

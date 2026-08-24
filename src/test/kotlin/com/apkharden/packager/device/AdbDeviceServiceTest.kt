@@ -75,6 +75,74 @@ class AdbDeviceServiceTest {
     }
 
     @Test
+    fun `scrcpy mirror keeps control enabled and uses a dedicated window title`() {
+        val args = buildScrcpyMirrorArgs("device serial", "ApkHarden mirror", 900, 560)
+
+        assertEquals(
+            listOf(
+                "--serial", "device serial",
+                "--window-title", "ApkHarden mirror",
+                "--window-width", "900",
+                "--window-height", "560",
+                "--shortcut-mod", "lctrl",
+                "--no-audio",
+                "--no-clipboard-autosync",
+                "--max-fps", "30",
+            ),
+            args,
+        )
+        assertFalse("--no-control" in args)
+        assertFalse("--no-window" in args)
+    }
+
+    @Test
+    fun `large tablet mirror caps the video encoder before launch`() {
+        val args = buildScrcpyMirrorArgs(
+            serial = "tablet",
+            windowTitle = "ApkHarden tablet",
+            windowWidth = 2560,
+            windowHeight = 1600,
+            maxVideoSize = 1920,
+        )
+
+        assertEquals(listOf("--max-size", "1920"), args.takeLast(2))
+    }
+
+    @Test
+    fun `device screen size prefers an override`() {
+        val size = parseDeviceScreenSize(
+            "Physical size: 1080x2336\nOverride size: 720x1557",
+        )
+
+        assertEquals(DeviceScreenSize(720, 1557), size)
+    }
+
+    @Test
+    fun `current display size uses the rotated default display bounds`() {
+        val output = """
+            Display: mDisplayId=9
+              overrideConfig={ winConfig={ mBounds=Rect(0, 0 - 1920, 1200) } }
+            Display: mDisplayId=0 (organized)
+              overrideConfig={ winConfig={ mBounds=Rect(0, 0 - 2560, 1600) } }
+        """.trimIndent()
+
+        assertEquals(DeviceScreenSize(2560, 1600), parseCurrentDisplaySize(output))
+    }
+
+    @Test
+    fun `mirror window fills the available screen without exceeding it`() {
+        val fitted = fitMirrorWindow(
+            device = DeviceScreenSize(1080, 2340),
+            maxWidth = 3072,
+            maxHeight = 1768,
+        )
+
+        assertEquals(MirrorWindowSize(816, 1768), fitted)
+        assertTrue(fitted.width <= 3072)
+        assertTrue(fitted.height <= 1768)
+    }
+
+    @Test
     fun `compatibility frame is bounded and has even dimensions`() {
         val source = BufferedImage(1081, 2341, BufferedImage.TYPE_INT_ARGB)
 

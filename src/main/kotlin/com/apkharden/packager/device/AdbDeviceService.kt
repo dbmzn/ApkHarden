@@ -15,6 +15,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import javax.imageio.ImageIO
 import org.jcodec.api.awt.AWTSequenceEncoder
+import kotlin.math.roundToInt
 
 internal data class AndroidDevice(
     val serial: String,
@@ -49,6 +50,10 @@ internal enum class ScreenRecordingMode {
     SCREENSHOT_COMPATIBILITY,
 }
 
+internal data class DeviceScreenSize(val width: Int, val height: Int)
+
+internal data class MirrorWindowSize(val width: Int, val height: Int)
+
 private const val COMPATIBILITY_RECORDING_FPS = 4
 private const val COMPATIBILITY_RECORDING_MAX_EDGE = 1280
 
@@ -72,6 +77,82 @@ internal fun buildScrcpyRecordingArgs(serial: String, output: File, seconds: Int
         "--no-control",
         "--no-clipboard-autosync",
         "--max-fps", "30",
+    )
+}
+
+internal fun buildScrcpyMirrorArgs(
+    serial: String,
+    windowTitle: String,
+    windowWidth: Int,
+    windowHeight: Int,
+    maxVideoSize: Int? = null,
+): List<String> {
+    require(serial.isNotBlank()) { "设备序列号不能为空" }
+    require(windowTitle.isNotBlank()) { "镜像窗口标题不能为空" }
+    require(windowWidth > 0 && windowHeight > 0) { "镜像窗口尺寸必须大于 0" }
+    if (maxVideoSize != null) require(maxVideoSize > 0) { "镜像视频最大尺寸必须大于 0" }
+    return buildList {
+        addAll(
+            listOf(
+                "--serial", serial,
+                "--window-title", windowTitle,
+                "--window-width", windowWidth.toString(),
+                "--window-height", windowHeight.toString(),
+                "--shortcut-mod", "lctrl",
+                "--no-audio",
+                "--no-clipboard-autosync",
+                "--max-fps", "30",
+            ),
+        )
+        if (maxVideoSize != null) addAll(listOf("--max-size", maxVideoSize.toString()))
+    }
+}
+
+internal fun parseDeviceScreenSize(output: String): DeviceScreenSize {
+    val match = Regex("(?:Physical|Override) size:\\s*(\\d+)x(\\d+)", RegexOption.IGNORE_CASE)
+        .findAll(output)
+        .lastOrNull()
+        ?: Regex("(\\d+)x(\\d+)").find(output)
+        ?: throw IllegalStateException("无法读取设备屏幕尺寸：${output.trim()}")
+    return DeviceScreenSize(
+        width = match.groupValues[1].toInt(),
+        height = match.groupValues[2].toInt(),
+    ).also {
+        require(it.width > 0 && it.height > 0) { "设备屏幕尺寸无效" }
+    }
+}
+
+internal fun parseCurrentDisplaySize(output: String): DeviceScreenSize? {
+    val displayZero = Regex(
+        "Display:\\s*mDisplayId=0\\b[\\s\\S]*?mBounds=Rect\\(0,\\s*0\\s*-\\s*(\\d+),\\s*(\\d+)\\)",
+        RegexOption.IGNORE_CASE,
+    ).find(output)
+    val currentRect = displayZero ?: Regex(
+        "mCurrentDisplayRect=Rect\\(0,\\s*0\\s*-\\s*(\\d+),\\s*(\\d+)\\)",
+        RegexOption.IGNORE_CASE,
+    ).find(output)
+    return currentRect?.let {
+        DeviceScreenSize(
+            width = it.groupValues[1].toInt(),
+            height = it.groupValues[2].toInt(),
+        )
+    }?.takeIf { it.width > 0 && it.height > 0 }
+}
+
+internal fun fitMirrorWindow(
+    device: DeviceScreenSize,
+    maxWidth: Int,
+    maxHeight: Int,
+): MirrorWindowSize {
+    require(maxWidth > 0 && maxHeight > 0) { "桌面可用尺寸必须大于 0" }
+    val scale = minOf(
+        1.0,
+        maxWidth.toDouble() / device.width,
+        maxHeight.toDouble() / device.height,
+    )
+    return MirrorWindowSize(
+        width = (device.width * scale).roundToInt().coerceAtLeast(1),
+        height = (device.height * scale).roundToInt().coerceAtLeast(1),
     )
 }
 
@@ -303,6 +384,10 @@ internal object AdbDeviceService {
         return bytes
     }
 
+    fun screenSize(device: AndroidDevice): DeviceScreenSize =
+        parseCurrentDisplaySize(shell(device.serial, "dumpsys", "window", "displays"))
+            ?: parseDeviceScreenSize(shell(device.serial, "wm", "size"))
+
     fun recordScreen(device: AndroidDevice, output: File, seconds: Int = 10): ScreenRecordingMode {
         require(seconds in 1..180) { "录屏时长必须为 1～180 秒" }
         val remote = "/sdcard/apkharden-${System.currentTimeMillis()}.mp4"
@@ -455,7 +540,7 @@ internal object AdbDeviceService {
         return candidates.firstOrNull(File::isFile)?.absolutePath ?: "adb"
     }
 
-    private fun scrcpyExecutable(): File? {
+    internal fun scrcpyExecutable(): File? {
         val configured = System.getProperty("apkharden.scrcpy.path")?.takeIf(String::isNotBlank)
             ?: System.getenv("APK_HARDEN_SCRCPY")?.takeIf(String::isNotBlank)
         val resources = System.getProperty("compose.application.resources.dir")?.takeIf(String::isNotBlank)
