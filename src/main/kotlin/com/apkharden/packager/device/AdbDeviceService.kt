@@ -62,7 +62,8 @@ internal fun isScreenRecordUnavailable(error: Throwable): Boolean =
         val normalized = message.lowercase()
         normalized.contains("screenrecord: inaccessible or not found") ||
             normalized.contains("screenrecord: not found") ||
-            normalized.contains("screenrecord: no such file or directory")
+            normalized.contains("screenrecord: no such file or directory") ||
+            normalized.contains("encoder failed") || normalized.contains("unable to configure video codec")
     }
 
 internal fun buildScrcpyRecordingArgs(serial: String, output: File, seconds: Int): List<String> {
@@ -77,6 +78,7 @@ internal fun buildScrcpyRecordingArgs(serial: String, output: File, seconds: Int
         "--no-control",
         "--no-clipboard-autosync",
         "--max-fps", "30",
+        "--max-size", "1920",
     )
 }
 
@@ -247,7 +249,7 @@ internal object AdbDeviceService {
         require(device.state == "device") { "设备当前状态：${device.state}" }
         if (!skipInstall) {
             log("安装 APK 到 ${device.model}…")
-            runAdb(listOf("-s", device.serial, "install", "-r", apk.absolutePath), 180)
+            runAdb(listOf("-s", device.serial, "install", "--no-incremental", "-r", apk.absolutePath), 180)
         }
         log("清理日志并执行冷启动…")
         runCatching { runAdb(listOf("-s", device.serial, "logcat", "-c"), 15) }
@@ -430,6 +432,7 @@ internal object AdbDeviceService {
                 buildScrcpyRecordingArgs(device.serial, temporary, seconds)
             val process = ProcessBuilder(command)
                 .directory(executable.parentFile)
+                .apply { environment()["ADB"] = adbExecutable() }
                 .redirectErrorStream(true)
                 .start()
             val captured = AtomicReference("")
@@ -519,35 +522,50 @@ internal object AdbDeviceService {
 
     private fun runAdbBytes(args: List<String>, timeoutSeconds: Long): ByteArray {
         val process = ProcessBuilder(listOf(adbExecutable()) + args).redirectErrorStream(false).start()
-        val bytes = process.inputStream.readBytes()
-        val error = process.errorStream.bufferedReader().use { it.readText() }
+        val captured = AtomicReference(ByteArray(0))
+        val errors = AtomicReference("")
+        val reader = Thread { captured.set(process.inputStream.use { it.readBytes() }) }.apply { isDaemon = true; start() }
+        val errorReader = Thread { errors.set(process.errorStream.bufferedReader().use { it.readText() }) }.apply { isDaemon = true; start() }
         if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
             process.destroyForcibly()
             throw IllegalStateException("ADB 执行超时：${args.joinToString(" ")}")
         }
-        if (process.exitValue() != 0) throw IllegalStateException(error.trim().ifBlank { "ADB 执行失败" })
-        return bytes
+        reader.join(5_000)
+        errorReader.join(5_000)
+        if (process.exitValue() != 0) throw IllegalStateException(errors.get().trim().ifBlank { "ADB 执行失败" })
+        return captured.get()
     }
 
-    private fun adbExecutable(): String {
-        val sdk = System.getenv("ANDROID_HOME")?.takeIf { it.isNotBlank() }
-            ?: System.getenv("ANDROID_SDK_ROOT")?.takeIf { it.isNotBlank() }
-        val candidates = listOfNotNull(
-            sdk?.let { File(it, "platform-tools/adb.exe") },
-            System.getenv("LOCALAPPDATA")?.let { File(it, "Android/Sdk/platform-tools/adb.exe") },
-            File("C:/AndroidSdk/platform-tools/adb.exe"),
-        )
-        return candidates.firstOrNull(File::isFile)?.absolutePath ?: "adb"
+    internal fun adbExecutable(): String {
+        val configured = System.getProperty("apkharden.adb.path")?.takeIf(String::isNotBlank)
+        val windows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+        val name = if (windows) "adb.exe" else "adb"
+        val sdk = System.getenv("ANDROID_HOME")?.takeIf(String::isNotBlank)
+            ?: System.getenv("ANDROID_SDK_ROOT")?.takeIf(String::isNotBlank)
+        val home = System.getProperty("user.home")
+        return (listOfNotNull(
+            configured?.let(::File),
+            sdk?.let { File(it, "platform-tools/$name") },
+            File(home, "Library/Android/sdk/platform-tools/$name"),
+            File(home, "Android/Sdk/platform-tools/$name"),
+            System.getenv("LOCALAPPDATA")?.let { File(it, "Android/Sdk/platform-tools/$name") },
+            if (windows) File("C:/AndroidSdk/platform-tools/adb.exe") else null,
+        ) + executableSearchPaths(name)).firstOrNull { it.isFile && it.canExecute() }?.absolutePath ?: name
     }
 
     internal fun scrcpyExecutable(): File? {
         val configured = System.getProperty("apkharden.scrcpy.path")?.takeIf(String::isNotBlank)
             ?: System.getenv("APK_HARDEN_SCRCPY")?.takeIf(String::isNotBlank)
         val resources = System.getProperty("compose.application.resources.dir")?.takeIf(String::isNotBlank)
-        return listOfNotNull(
+        val name = if (System.getProperty("os.name").startsWith("Windows", true)) "scrcpy.exe" else "scrcpy"
+        return (listOfNotNull(
             configured?.let(::File),
-            resources?.let { File(it, "scrcpy/scrcpy.exe") },
-            File(System.getProperty("user.dir"), "scrcpy/scrcpy.exe"),
-        ).firstOrNull(File::isFile)
+            resources?.let { File(it, "scrcpy/$name") },
+            File(System.getProperty("user.dir"), "scrcpy/$name"),
+        ) + executableSearchPaths(name)).firstOrNull { it.isFile && it.canExecute() }
     }
+
+    private fun executableSearchPaths(name: String): List<File> =
+        (System.getenv("PATH").orEmpty().split(File.pathSeparator) + listOf("/opt/homebrew/bin", "/usr/local/bin"))
+            .filter(String::isNotBlank).map { File(it, name) }
 }

@@ -20,7 +20,7 @@ internal object WindowsDpapi {
 
 /**
  * Stores the reusable signing profile for the current OS user.
- * Passwords are encrypted with Windows DPAPI before they enter Preferences.
+ * Passwords are encrypted with the OS secret protector before they enter Preferences.
  */
 class SigningProfileStore internal constructor(
     private val preferences: Preferences,
@@ -29,8 +29,8 @@ class SigningProfileStore internal constructor(
 ) {
     constructor() : this(
         Preferences.userRoot().node(PREFERENCES_NODE),
-        WindowsDpapi::protect,
-        WindowsDpapi::unprotect,
+        PlatformSecrets::protect,
+        PlatformSecrets::unprotect,
     )
 
     fun load(): SigningProfile? {
@@ -52,10 +52,13 @@ class SigningProfileStore internal constructor(
     }
 
     fun save(profile: SigningProfile) {
+        // Finish both encryption operations before changing an existing configuration.
+        val storePassword = encrypt(profile.storePassword)
+        val keyPassword = encrypt(profile.keyPassword)
         preferences.put(KEYSTORE_PATH, profile.keystorePath)
         preferences.put(ALIAS, profile.alias)
-        preferences.put(STORE_PASSWORD, encrypt(profile.storePassword))
-        preferences.put(KEY_PASSWORD, encrypt(profile.keyPassword))
+        preferences.put(STORE_PASSWORD, storePassword)
+        preferences.put(KEY_PASSWORD, keyPassword)
         preferences.put(CERTIFICATE_SHA256, profile.certificateSha256)
         preferences.flush()
     }

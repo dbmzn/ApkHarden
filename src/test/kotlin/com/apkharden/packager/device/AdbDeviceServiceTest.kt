@@ -50,6 +50,7 @@ class AdbDeviceServiceTest {
         val error = IllegalStateException("/system/bin/sh: screenrecord: inaccessible or not found")
 
         assertTrue(isScreenRecordUnavailable(error))
+        assertTrue(isScreenRecordUnavailable(IllegalStateException("Encoder failed (err=-38)")))
         assertFalse(isScreenRecordUnavailable(IllegalStateException("device offline")))
     }
 
@@ -69,6 +70,7 @@ class AdbDeviceServiceTest {
                 "--no-control",
                 "--no-clipboard-autosync",
                 "--max-fps", "30",
+                "--max-size", "1920",
             ),
             args,
         )

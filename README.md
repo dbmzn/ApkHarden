@@ -55,7 +55,7 @@
 ```
 ./gradlew run
 ```
-首次使用时进入“签名工具”，选择 keystore（`.jks` / `.p12`），填写别名和密码，点击“验证并保存”。签名密码通过 Windows DPAPI 加密，仅当前 Windows 用户可以解密。
+首次使用时进入“签名工具”，选择 keystore（`.jks` / `.p12`），填写别名和密码，点击“验证并保存”。Windows 上签名密码通过 DPAPI 加密；macOS 上通过 AES-GCM 加密，加密密钥保存在当前用户的钥匙串中。密码不会以明文写入配置。
 
 桌面端以“APK 加固”为突出主入口，APK 工具区包含体检、Manifest、文件浏览、版本对比和包体积分析，设备工具区包含安装验证与 ADB 工具箱，配置区提供签名百宝箱。进入“APK 加固”后只需选择输入 APK 和输出路径，已保存的正式签名会被自动复用。点击“开始加固并签名”后，输出目录会得到：
 
@@ -64,7 +64,7 @@ app-hardened.apk
 app-hardened-report.json
 ```
 
-命令行也可以复用桌面端已保存的 DPAPI 签名配置，避免把密码写入命令历史：
+命令行也可以复用桌面端已保存的加密签名配置，避免把密码写入命令历史：
 
 ```powershell
 ./gradlew harden --args="--input app.apk --output app-hardened.apk --savedProfile true"
@@ -100,7 +100,7 @@ Downloads/ApkHarden-diagnostics-yyyyMMdd-HHmmss.zip
 
 ```
 ./gradlew test              # 运行单元 + 集成测试
-./gradlew deployToDesktop   # 打包发行版并镜像到 ~/ApkHarden（桌面快捷方式指向处），先关掉运行中的实例
+./gradlew deployToDesktop   # 打包并部署：macOS 到 ~/Desktop/ApkHarden.app，Windows 到 ~/ApkHarden；先关闭运行中的实例
 $env:ANDROID_HOME='C:\AndroidSdk'; pwsh scripts/build-shell.ps1   # 改了 guard/shell/native 后重建壳资源
 pwsh scripts/verify-device-launch.ps1 -Apk app-hardened.apk -PackageName com.example.app -Serial <设备序列号>  # 安装、冷启动和崩溃门禁
 ```
@@ -126,3 +126,20 @@ pwsh scripts/verify-device-launch.ps1 -Apk app-hardened.apk -PackageName com.exa
 ## 局限
 
 业务 DEX 在 APK 中不再能被 JADX 直接反编译，但运行时仍必须解密执行；具备 root、Hook 或内存 Dump 能力的攻击者仍可能脱壳。当前属于基础 DEX 壳，不包含 VMP、DEX2C、SO 加壳或高强度 Frida/Xposed 对抗。
+
+### macOS 功能验证
+
+macOS 构建自动选择 ARM64 / Intel 原生依赖，并附带官方 scrcpy 3.3.4。文件选择器使用 AWT 原生对话框，避免在 Compose 线程直接创建 Cocoa 窗口。ADB 自动查找 Android Studio 默认 SDK、环境变量和 PATH。
+
+可选真机验证仅操作独立测试包 `com.apkharden.verification`，会安装测试 APK、启动它、授予测试通知权限并清除该测试包的数据。测试产物位于 `build/verification/`：
+
+```sh
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+python3 scripts/build-verification-fixture.py
+APK_HARDEN_DEVICE_TEST=<设备序列号> \
+APK_HARDEN_KEYCHAIN_TEST=true \
+APK_HARDEN_SCRCPY="$PWD/build/app-resources/macos/scrcpy/scrcpy" \
+./gradlew test createDistributable
+```
+
+首次运行先执行 `./gradlew prepareScrcpyResources`。钥匙串测试创建独立随机测试项，测试结束时删除，不读取已有签名密钥。完整验证记录见 [macOS 功能验证报告](docs/macos-verification-2026-09-05.md)。

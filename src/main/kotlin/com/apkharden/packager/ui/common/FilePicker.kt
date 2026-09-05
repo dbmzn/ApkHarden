@@ -1,5 +1,9 @@
 package com.apkharden.packager.ui.common
 
+import java.awt.EventQueue
+import java.awt.FileDialog
+import java.awt.Frame
+import java.io.File
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.util.nfd.NFDFilterItem
 import org.lwjgl.util.nfd.NativeFileDialog.NFD_FreePath
@@ -19,6 +23,9 @@ fun pickFile(
     save: Boolean = false,
     extensions: List<String> = emptyList(),
 ): String? {
+    if (System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) {
+        return pickMacPath(filterName ?: "选择文件", save, extensions)
+    }
     NFD_Init()
     try {
         MemoryStack.stackPush().use { stack ->
@@ -44,6 +51,9 @@ fun pickFile(
 }
 
 fun pickDirectory(): String? {
+    if (System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) {
+        return pickMacPath("选择文件夹", directory = true)
+    }
     NFD_Init()
     try {
         MemoryStack.stackPush().use { stack ->
@@ -56,4 +66,37 @@ fun pickDirectory(): String? {
     } finally {
         NFD_Quit()
     }
+}
+
+// AWT dispatches Cocoa panels to the macOS main thread; direct NFD calls from
+// the Compose event thread abort the process when NSWindow is constructed.
+private fun pickMacPath(
+    title: String,
+    save: Boolean = false,
+    extensions: List<String> = emptyList(),
+    directory: Boolean = false,
+): String? {
+    var selected: String? = null
+    val showDialog = Runnable {
+        val property = "apple.awt.fileDialogForDirectories"
+        val previous = System.getProperty(property)
+        val dialog = FileDialog(null as Frame?, title, if (save) FileDialog.SAVE else FileDialog.LOAD)
+        try {
+            System.setProperty(property, directory.toString())
+            if (extensions.isNotEmpty() && !directory) {
+                dialog.setFilenameFilter { _, name ->
+                    extensions.any { name.endsWith(".$it", ignoreCase = true) }
+                }
+            }
+            dialog.isVisible = true
+            selected = dialog.file?.let { File(dialog.directory, it).absolutePath }
+        } finally {
+            dialog.dispose()
+            if (previous == null) System.clearProperty(property)
+            else System.setProperty(property, previous)
+        }
+    }
+    if (EventQueue.isDispatchThread()) showDialog.run()
+    else EventQueue.invokeAndWait(showDialog)
+    return selected
 }

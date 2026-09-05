@@ -1,0 +1,32 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.apkharden.verification"
+    android:versionCode="1"
+    android:versionName="1.0">
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="35" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application
+        android:name="com.apkharden.verification.FixtureApplication"
+        android:appComponentFactory="com.apkharden.verification.FixtureComponentFactory"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:label="ApkHarden Verification"
+        android:debuggable="false">
+        <provider
+            android:name="com.apkharden.verification.StartupProvider"
+            android:authorities="com.apkharden.verification.startup"
+            android:exported="false" />
+        <activity
+            android:name="com.apkharden.verification.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="apkharden-test" android:host="verify" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

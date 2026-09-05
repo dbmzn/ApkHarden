@@ -62,9 +62,6 @@ internal class DetachedScrcpySession {
     private fun launch(device: AndroidDevice, currentGeneration: Long) {
         val captured = StringBuilder()
         try {
-            check(System.getProperty("os.name").contains("Windows", ignoreCase = true)) {
-                "当前独立镜像窗口仅支持 Windows"
-            }
             val executable = AdbDeviceService.scrcpyExecutable()
                 ?: throw IllegalStateException("未找到随应用部署的 scrcpy，请重新构建或部署桌面版")
             val deviceSize = AdbDeviceService.screenSize(device)
@@ -74,11 +71,15 @@ internal class DetachedScrcpySession {
             val graphics = GraphicsEnvironment.getLocalGraphicsEnvironment()
             val desktop = graphics.maximumWindowBounds
             val transform = graphics.defaultScreenDevice.defaultConfiguration.defaultTransform
+            // SDL uses logical window coordinates on macOS (Retina pixel scaling is automatic).
+            val mac = System.getProperty("os.name").startsWith("Mac", true)
+            val scaleX = if (mac) 1.0 else transform.scaleX
+            val scaleY = if (mac) 1.0 else transform.scaleY
             val windowSize = fitMirrorWindow(
                 device = deviceSize,
-                maxWidth = (desktop.width * transform.scaleX).roundToInt(),
+                maxWidth = (desktop.width * scaleX).roundToInt(),
                 maxHeight = (
-                    (desktop.height * transform.scaleY).roundToInt() -
+                    (desktop.height * scaleY).roundToInt() -
                         WINDOW_CHROME_PHYSICAL_ALLOWANCE
                     ).coerceAtLeast(480),
             )
@@ -94,6 +95,11 @@ internal class DetachedScrcpySession {
                 ),
             )
                 .directory(executable.parentFile)
+                .apply {
+                    environment()["ADB"] = AdbDeviceService.adbExecutable()
+                    // macOS buffers stdout when piped; readiness requires immediate Texture logs.
+                    environment()["NSUnbufferedIO"] = "YES"
+                }
                 .redirectErrorStream(true)
                 .start()
             synchronized(lock) {
@@ -113,7 +119,7 @@ internal class DetachedScrcpySession {
                 }
             }, "apkharden-detached-device-mirror-output").apply { isDaemon = true; start() }
 
-            waitForStableMirrorWindow(title, launched, currentGeneration)
+            waitForStableMirrorWindow(title, launched, currentGeneration, captured)
             status(
                 MirrorPhase.RUNNING,
                 "独立镜像窗口已铺满一屏：${windowSize.width} × ${windowSize.height}" +
@@ -138,14 +144,26 @@ internal class DetachedScrcpySession {
                 }
             }
         } catch (failure: Throwable) {
-            if (isCurrent(currentGeneration)) {
-                requestedSerial = null
-                reportError(failure.message ?: "镜像窗口启动失败")
+            synchronized(lock) {
+                if (isCurrent(currentGeneration)) {
+                    stopProcessLocked()
+                    requestedSerial = null
+                    reportError(failure.message ?: "镜像窗口启动失败")
+                }
             }
         }
     }
 
-    private fun waitForStableMirrorWindow(title: String, launched: Process, currentGeneration: Long) {
+    private fun waitForStableMirrorWindow(title: String, launched: Process, currentGeneration: Long, captured: StringBuilder) {
+        if (!System.getProperty("os.name").startsWith("Windows", true)) {
+            repeat(150) {
+                check(isCurrent(currentGeneration)) { "镜像启动已取消" }
+                check(launched.isAlive) { synchronized(captured) { captured.toString().trim().ifBlank { "scrcpy 启动失败" } } }
+                if (synchronized(captured) { captured.contains("Texture:") }) return
+                Thread.sleep(100)
+            }
+            error("等待镜像画面超时")
+        }
         var previousWindow: HWND? = null
         var stableSamples = 0
         repeat(150) {

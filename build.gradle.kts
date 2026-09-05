@@ -14,9 +14,16 @@ plugins {
 }
 
 val scrcpyVersion = "3.3.4"
-val scrcpyArchiveName = "scrcpy-win64-v$scrcpyVersion.zip"
+val isMac = System.getProperty("os.name").startsWith("Mac", ignoreCase = true)
+val isArm64 = System.getProperty("os.arch") in listOf("aarch64", "arm64")
+val scrcpyArchiveName = if (isMac) "scrcpy-macos-${if (isArm64) "aarch64" else "x86_64"}-v$scrcpyVersion.tar.gz"
+    else "scrcpy-win64-v$scrcpyVersion.zip"
 val scrcpyDownloadUrl = "https://github.com/Genymobile/scrcpy/releases/download/v$scrcpyVersion/$scrcpyArchiveName"
-val scrcpyArchiveSha256 = "D8A155B7C180B7CA4CDADD40712B8750B63F3AAB48CB5B8A2A39AC2D0D4C5D38"
+val scrcpyArchiveSha256 = when {
+    isMac && isArm64 -> "8FEF43520405DD523C74E1530AC68FEBCC5A405EA89712C874936675DA8513DD"
+    isMac -> "CF9B3453A33279B6009DFB256B1A84C374BD4C30A71EDD74BACAB28D72A5D929"
+    else -> "D8A155B7C180B7CA4CDADD40712B8750B63F3AAB48CB5B8A2A39AC2D0D4C5D38"
+}
 val scrcpyArchive = providers.provider {
     File(gradle.gradleUserHomeDir, "caches/apkharden/$scrcpyArchiveName")
 }
@@ -36,7 +43,7 @@ fun sha256(file: File): String {
 }
 
 val downloadScrcpy by tasks.registering {
-    onlyIf { System.getProperty("os.name").contains("Windows", ignoreCase = true) }
+    onlyIf { isMac || System.getProperty("os.name").contains("Windows", ignoreCase = true) }
     doLast {
         val destination = scrcpyArchive.get()
         if (destination.isFile && sha256(destination) == scrcpyArchiveSha256) return@doLast
@@ -67,15 +74,15 @@ val downloadScrcpy by tasks.registering {
 }
 
 val prepareScrcpyResources by tasks.registering(Sync::class) {
-    onlyIf { System.getProperty("os.name").contains("Windows", ignoreCase = true) }
+    onlyIf { isMac || System.getProperty("os.name").contains("Windows", ignoreCase = true) }
     dependsOn(downloadScrcpy)
-    from({ zipTree(scrcpyArchive.get()) }) {
+    from({ if (isMac) tarTree(resources.gzip(scrcpyArchive.get())) else zipTree(scrcpyArchive.get()) }) {
         eachFile {
             relativePath = RelativePath(!isDirectory, *relativePath.segments.drop(1).toTypedArray())
         }
         includeEmptyDirs = false
     }
-    into(scrcpyAppResourcesRoot.map { it.dir("windows/scrcpy") })
+    into(scrcpyAppResourcesRoot.map { it.dir("${if (isMac) "macos" else "windows"}/scrcpy") })
 }
 repositories {
     google()
@@ -89,7 +96,7 @@ val lwjglVersion = "3.3.3"
 val lwjglNatives = System.getProperty("os.name").lowercase().let { os ->
     when {
         os.contains("win") -> "natives-windows"
-        os.contains("mac") -> "natives-macos"
+        os.contains("mac") -> if (System.getProperty("os.arch") in listOf("aarch64", "arm64")) "natives-macos-arm64" else "natives-macos"
         else -> "natives-linux"
     }
 }
@@ -101,8 +108,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.jcodec:jcodec-javase:0.2.5")
-    implementation("net.java.dev.jna:jna:5.6.0")
-    implementation("net.java.dev.jna:jna-platform:5.6.0")
+    implementation("net.java.dev.jna:jna:5.17.0")
+    implementation("net.java.dev.jna:jna-platform:5.17.0")
     implementation("org.lwjgl:lwjgl:$lwjglVersion")
     implementation("org.lwjgl:lwjgl-nfd:$lwjglVersion")
     runtimeOnly("org.lwjgl:lwjgl:$lwjglVersion:$lwjglNatives")
@@ -110,7 +117,13 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    if (isMac) jvmArgs("--add-exports=java.desktop/sun.awt.datatransfer=ALL-UNNAMED")
+    // Opt-in integration checks must not be reused from an ordinary unit-test run.
+    inputs.property("deviceVerification", System.getenv("APK_HARDEN_DEVICE_TEST").orEmpty())
+    inputs.property("keychainVerification", System.getenv("APK_HARDEN_KEYCHAIN_TEST").orEmpty())
+}
 
 kotlin { jvmToolchain(17) }
 
@@ -131,10 +144,10 @@ tasks.register<Sync>("deployToDesktop") {
     group = "apkharden"
     description = "Build the distributable and mirror it to the deployed ~/ApkHarden copy."
     dependsOn("createDistributable")
-    val deployDir = File(System.getProperty("user.home"), "ApkHarden")
+    val deployDir = File(System.getProperty("user.home"), if (isMac) "Desktop/ApkHarden.app" else "ApkHarden")
     // jpackage marks the launcher .exe read-only; clear it so the mirror can overwrite in place.
     doFirst { deployDir.walkTopDown().forEach { it.setWritable(true) } }
-    from(layout.buildDirectory.dir("compose/binaries/main/app/ApkHarden"))
+    from(layout.buildDirectory.dir("compose/binaries/main/app/${if (isMac) "ApkHarden.app" else "ApkHarden"}"))
     into(deployDir)
 }
 
@@ -157,5 +170,20 @@ compose.desktop {
 tasks.configureEach {
     if (name == "prepareAppResources") {
         dependsOn(prepareScrcpyResources)
+    }
+}
+
+// jpackage copies app resources without executable bits on macOS.
+tasks.configureEach {
+    if (name == "createDistributable") {
+        inputs.property("macExecutableResources", 1)
+        doLast {
+            if (isMac) {
+                val resources = layout.buildDirectory.dir("compose/binaries/main/app/ApkHarden.app/Contents/app/resources/scrcpy").get().asFile
+                listOf("scrcpy", "adb").forEach { name ->
+                    check(File(resources, name).setExecutable(true, false)) { "Cannot mark $name executable" }
+                }
+            }
+        }
     }
 }

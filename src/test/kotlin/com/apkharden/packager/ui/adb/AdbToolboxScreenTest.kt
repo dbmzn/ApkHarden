@@ -10,6 +10,8 @@ import javax.imageio.ImageIO
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 
 class AdbToolboxScreenTest {
     @Test
@@ -56,6 +58,7 @@ class AdbToolboxScreenTest {
     }
 
     @Test
+    @EnabledOnOs(OS.WINDOWS)
     fun `recording output can be selected in Windows Explorer`() {
         val file = File("C:\\Users\\tester\\Downloads\\recording sample.mp4")
 

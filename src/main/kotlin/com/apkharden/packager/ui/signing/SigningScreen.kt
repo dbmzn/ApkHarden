@@ -15,6 +15,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.KeystoreUtil
+import com.apkharden.packager.signing.PlatformSecrets
 import com.apkharden.packager.signing.SigningProfile
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.theme.LocalSemantic
@@ -51,7 +52,7 @@ fun SigningScreen(
             color = sem.subtle,
         )
         Text(
-            "签名密码使用 Windows DPAPI 加密，只能由当前 Windows 用户解密；不会以明文写入配置。",
+            PlatformSecrets.description,
             style = MaterialTheme.typography.body2,
             color = sem.advice,
             modifier = Modifier.fillMaxWidth()

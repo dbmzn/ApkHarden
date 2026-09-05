@@ -46,10 +46,6 @@ import java.awt.BasicStroke
 import java.awt.Color as AwtColor
 import java.awt.Desktop
 import java.awt.RenderingHints
-import java.awt.Toolkit
-import java.awt.datatransfer.DataFlavor
-import java.awt.datatransfer.Transferable
-import java.awt.datatransfer.UnsupportedFlavorException
 import java.awt.geom.Line2D
 import java.awt.geom.Rectangle2D
 import javax.imageio.ImageIO
@@ -829,16 +825,3 @@ private fun annotationStrokeWidth(imageWidth: Int, imageHeight: Int): Float =
 
 private fun arrowHeadLength(imageWidth: Int, imageHeight: Int): Float =
     (min(imageWidth, imageHeight) * 0.035f).coerceIn(18f, 56f)
-
-private fun copyImageToClipboard(bytes: ByteArray) {
-    val image = ImageIO.read(ByteArrayInputStream(bytes)) ?: throw IllegalArgumentException("截图格式无效")
-    val transferable = object : Transferable {
-        override fun getTransferDataFlavors(): Array<DataFlavor> = arrayOf(DataFlavor.imageFlavor)
-        override fun isDataFlavorSupported(flavor: DataFlavor): Boolean = flavor == DataFlavor.imageFlavor
-        override fun getTransferData(flavor: DataFlavor): Any {
-            if (!isDataFlavorSupported(flavor)) throw UnsupportedFlavorException(flavor)
-            return image
-        }
-    }
-    Toolkit.getDefaultToolkit().systemClipboard.setContents(transferable, null)
-}
