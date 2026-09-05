@@ -8,12 +8,40 @@ import java.io.File
 import java.time.LocalDateTime
 import javax.imageio.ImageIO
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 
 class AdbToolboxScreenTest {
+    @Test
+    fun `screenshot is decoded before it can become preview state`() {
+        val bytes = BufferedImage(120, 100, BufferedImage.TYPE_INT_ARGB).toPng()
+
+        val preview = decodeScreenshotPreview(bytes)
+
+        assertEquals(120, preview.bitmap.width)
+        assertEquals(100, preview.bitmap.height)
+        assertTrue(preview.bytes.contentEquals(bytes))
+    }
+
+    @Test
+    fun `invalid screenshot returns actionable error before opening preview`() {
+        val png = BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB).toPng()
+        for (bytes in listOf("error: device offline".toByteArray(), png.copyOf(16))) {
+            val error = assertThrows(IllegalArgumentException::class.java) {
+                decodeScreenshotPreview(bytes)
+            }
+            assertEquals("截图预览失败：设备返回的图片无法解码，请重试截图", error.message)
+            assertTrue(error.cause != null)
+        }
+        val emptyError = assertThrows(IllegalArgumentException::class.java) {
+            decodeScreenshotPreview(byteArrayOf())
+        }
+        assertEquals("设备没有返回截图数据，请重试", emptyError.message)
+    }
+
     @Test
     fun `capture is the default and live mirror is the second toolbox tab`() {
         assertEquals(AdbTab.CAPTURE, AdbTab.entries.first())

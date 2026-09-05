@@ -57,6 +57,31 @@ internal data class MirrorWindowSize(val width: Int, val height: Int)
 private const val COMPATIBILITY_RECORDING_FPS = 4
 private const val COMPATIBILITY_RECORDING_MAX_EDGE = 1280
 
+private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+
+internal fun hasVisibleSecureWindow(windowDump: String): Boolean =
+    windowDump.split(Regex("(?m)(?=^\\s*Window #\\d+ Window\\{)")).any { window ->
+        Regex("(?m)^\\s*fl=.*\\bSECURE\\b").containsMatchIn(window) &&
+            Regex("(?m)^\\s*isOnScreen=true\\s*$").containsMatchIn(window) &&
+            Regex("(?m)^\\s*isVisible=true\\s*$").containsMatchIn(window)
+    }
+
+internal fun validateScreenshotOutput(bytes: ByteArray, windowDump: () -> String): ByteArray {
+    if (bytes.size >= PNG_SIGNATURE.size && PNG_SIGNATURE.indices.all { bytes[it] == PNG_SIGNATURE[it] }) {
+        return bytes
+    }
+    // Some devices return an error message on stdout with a successful ADB exit code.
+    if (runCatching { hasVisibleSecureWindow(windowDump()) }.getOrDefault(false)) {
+        throw IllegalStateException("当前页面禁止截图（FLAG_SECURE），请关闭受保护的页面或弹窗，切换到允许截图的页面后重试")
+    }
+    val detail = bytes.take(256).toByteArray().toString(Charsets.UTF_8)
+        .replace(Regex("[\\p{Cntrl}\\s]+"), " ").trim()
+    throw IllegalStateException(
+        if (detail.isEmpty()) "设备没有返回截图数据，请确认屏幕已亮起后重试"
+        else "设备截图失败：$detail。请确认屏幕已亮起且当前页面允许截图后重试",
+    )
+}
+
 internal fun isScreenRecordUnavailable(error: Throwable): Boolean =
     generateSequence(error) { it.cause }.mapNotNull(Throwable::message).any { message ->
         val normalized = message.lowercase()
@@ -382,8 +407,7 @@ internal object AdbDeviceService {
 
     fun captureScreenshot(device: AndroidDevice): ByteArray {
         val bytes = runAdbBytes(listOf("-s", device.serial, "exec-out", "screencap", "-p"), 30)
-        require(bytes.isNotEmpty()) { "设备没有返回截图数据" }
-        return bytes
+        return validateScreenshotOutput(bytes) { shell(device.serial, "dumpsys", "window", "windows") }
     }
 
     fun screenSize(device: AndroidDevice): DeviceScreenSize =

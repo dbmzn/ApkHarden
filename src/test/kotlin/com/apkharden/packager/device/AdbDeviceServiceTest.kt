@@ -12,6 +12,61 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 class AdbDeviceServiceTest {
+    private val secureWindow = """
+        Window #12 Window{abc u0 com.example/.ProtectedActivity}:
+          mAttrs={(0,0)(fillxfill)
+            fl=DIM_BEHIND SECURE HARDWARE_ACCELERATED
+          isOnScreen=true
+          isVisible=true
+    """.trimIndent()
+
+    @Test
+    fun `device text output is reported as blocked capture for a visible secure window`() {
+        val error = assertThrows(IllegalStateException::class.java) {
+            validateScreenshotOutput("Failed to take take screenshot. Capturing failed.\n".toByteArray()) {
+                secureWindow
+            }
+        }
+        assertTrue(error.message!!.contains("当前页面禁止截图（FLAG_SECURE）"))
+    }
+
+    @Test
+    fun `hidden secure window does not misidentify an ordinary capture failure`() {
+        val dump = secureWindow.replace("isVisible=true", "isVisible=false") + "\n" + """
+
+            Window #13 Window{def u0 com.example/.NormalActivity}:
+              fl=HARDWARE_ACCELERATED
+              isOnScreen=true
+              isVisible=true
+        """.trimIndent()
+        assertFalse(hasVisibleSecureWindow(dump))
+        val error = assertThrows(IllegalStateException::class.java) {
+            validateScreenshotOutput("Capturing failed.".toByteArray()) { dump }
+        }
+        assertTrue(error.message!!.contains("设备截图失败：Capturing failed."))
+    }
+
+    @Test
+    fun `valid png is returned unchanged without querying window state`() {
+        val bytes = java.io.ByteArrayOutputStream().use { output ->
+            javax.imageio.ImageIO.write(BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB), "png", output)
+            output.toByteArray()
+        }
+        assertTrue(bytes.contentEquals(validateScreenshotOutput(bytes) { error("Must not query windows") }))
+    }
+
+    @Test
+    fun `unavailable window diagnostics preserves device failure and empty output is explicit`() {
+        val error = assertThrows(IllegalStateException::class.java) {
+            validateScreenshotOutput("Capturing failed.".toByteArray()) { error("Permission denied") }
+        }
+        assertTrue(error.message!!.contains("Capturing failed."))
+        val empty = assertThrows(IllegalStateException::class.java) {
+            validateScreenshotOutput(byteArrayOf()) { "" }
+        }
+        assertTrue(empty.message!!.contains("设备没有返回截图数据"))
+    }
+
     @Test
     fun `intent command keeps every user value as an individual argument`() {
         val args = buildStartIntentArgs(

@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -105,7 +106,7 @@ fun AdbToolboxScreen() {
     var output by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
-    var screenshotPreview by remember { mutableStateOf<ByteArray?>(null) }
+    var screenshotPreview by remember { mutableStateOf<ScreenshotPreview?>(null) }
     var previewStatus by remember { mutableStateOf<String?>(null) }
     var recordingSeconds by remember { mutableStateOf(DEFAULT_RECORDING_SECONDS) }
     var recordingRemainingSeconds by remember { mutableStateOf<Int?>(null) }
@@ -149,9 +150,10 @@ fun AdbToolboxScreen() {
             dismissButton = { OutlinedButton(onClick = { confirmClear = false }) { Text("取消") } },
         )
     }
-    screenshotPreview?.let { bytes ->
+    screenshotPreview?.let { preview ->
         ScreenshotPreviewDialog(
-            bytes = bytes,
+            bytes = preview.bytes,
+            bitmap = preview.bitmap,
             status = previewStatus,
             onDismiss = { screenshotPreview = null; previewStatus = null },
             onEdit = { previewStatus = null },
@@ -243,12 +245,16 @@ fun AdbToolboxScreen() {
                         val device = devices.firstOrNull { it.serial == serial } ?: return@Button
                         running = true; error = null; output = "正在截取设备屏幕…"; recordingOutputFile = null
                         scope.launch {
-                            runCatching { withContext(Dispatchers.IO) { AdbDeviceService.captureScreenshot(device) } }
-                                .onSuccess { bytes ->
-                                    screenshotPreview = bytes
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    decodeScreenshotPreview(AdbDeviceService.captureScreenshot(device))
+                                }
+                            }
+                                .onSuccess { preview ->
+                                    screenshotPreview = preview
                                     previewStatus = null
                                     output = "截图完成，正在预览"
-                                }.onFailure { error = friendly(it) }
+                                }.onFailure { error = friendly(it); output = "截图失败" }
                             running = false
                         }
                     }) { Text("设备截图") }
@@ -531,9 +537,22 @@ private fun revealFileInFolder(file: File) {
     }
 }
 
+internal data class ScreenshotPreview(val bytes: ByteArray, val bitmap: ImageBitmap)
+
+internal fun decodeScreenshotPreview(bytes: ByteArray): ScreenshotPreview {
+    require(bytes.isNotEmpty()) { "设备没有返回截图数据，请重试" }
+    val bitmap = try {
+        org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+    } catch (error: Exception) {
+        throw IllegalArgumentException("截图预览失败：设备返回的图片无法解码，请重试截图", error)
+    }
+    return ScreenshotPreview(bytes, bitmap)
+}
+
 @Composable
 private fun ScreenshotPreviewDialog(
     bytes: ByteArray,
+    bitmap: ImageBitmap,
     status: String?,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
@@ -541,7 +560,6 @@ private fun ScreenshotPreviewDialog(
     onSave: (ByteArray) -> Unit,
 ) {
     val sem = LocalSemantic.current
-    val bitmap = remember(bytes) { org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap() }
     var tool by remember(bytes) { mutableStateOf(AnnotationTool.ARROW) }
     var annotations by remember(bytes) { mutableStateOf(emptyList<ScreenshotAnnotation>()) }
     var draft by remember(bytes) { mutableStateOf<ScreenshotAnnotation?>(null) }
