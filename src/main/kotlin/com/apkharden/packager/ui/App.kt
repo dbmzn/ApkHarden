@@ -42,21 +42,21 @@ private enum class Destination(
     val icon: ImageVector,
     val primary: Boolean = false,
 ) {
-    HARDEN("APK 加固", "核心保护能力", Icons.Default.Lock, true),
+    ADB("ADB 工具箱", "无线连接与日常调试", Icons.Default.Settings, true),
+    DEVICE("设备验证", "安装与冷启动门禁", Icons.Default.PlayArrow),
+    HARDEN("APK 加固", "DEX 保护与加固签名", Icons.Default.Lock),
     INSPECT("APK 体检", "发布风险检查", Icons.Default.Search),
     COMPARE("APK 对比", "新旧版本变化", Icons.AutoMirrored.Filled.List),
     MANIFEST("Manifest", "组件与 Deep Link", Icons.Default.Info),
     ARCHIVE("文件浏览", "目录与大小占比", Icons.Default.Search),
     SIZE("包体分析", "增量来源排行", Icons.AutoMirrored.Filled.List),
-    DEVICE("设备验证", "安装与冷启动门禁", Icons.Default.PlayArrow),
-    ADB("ADB 工具箱", "调试与设备操作", Icons.Default.Settings),
     SIGNING("签名百宝箱", "证书与签名管理", Icons.Default.Settings),
 }
 
 @Composable
 fun App() {
     var dark by remember { mutableStateOf(true) }
-    var selected by remember { mutableStateOf(Destination.HARDEN) }
+    var selected by remember { mutableStateOf(Destination.ADB) }
     val signingStore = remember { SigningProfileStore() }
     var signingProfile by remember { mutableStateOf(runCatching { signingStore.load() }.getOrNull()) }
 
@@ -110,18 +110,16 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit) {
             Spacer(Modifier.width(11.dp))
             Column {
                 Text("ApkHarden", style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.Bold)
-                Text("Android 发布百宝箱", style = MaterialTheme.typography.caption, color = sem.subtle)
+                Text("Android 设备与 APK 工具箱", style = MaterialTheme.typography.caption, color = sem.subtle)
             }
         }
 
         Spacer(Modifier.height(12.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            NavSection("核心功能", listOf(Destination.HARDEN), selected, onSelect)
+            NavSection("设备调试", listOf(Destination.ADB, Destination.DEVICE), selected, onSelect)
             Spacer(Modifier.height(8.dp))
             NavSection("APK 工具", listOf(Destination.INSPECT, Destination.MANIFEST, Destination.ARCHIVE,
-                Destination.COMPARE, Destination.SIZE), selected, onSelect)
-            Spacer(Modifier.height(8.dp))
-            NavSection("设备工具", listOf(Destination.DEVICE, Destination.ADB), selected, onSelect)
+                Destination.COMPARE, Destination.SIZE, Destination.HARDEN), selected, onSelect)
             Spacer(Modifier.height(8.dp))
             NavSection("配置", listOf(Destination.SIGNING), selected, onSelect)
         }
@@ -130,9 +128,9 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit) {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colors.primary.copy(alpha = .08f)).padding(12.dp),
         ) {
-            Text("本地离线处理", style = MaterialTheme.typography.subtitle2, color = MaterialTheme.colors.primary)
+            Text("设备调试，随手可用", style = MaterialTheme.typography.subtitle2, color = MaterialTheme.colors.primary)
             Spacer(Modifier.height(3.dp))
-            Text("APK 与签名密码不会上传", style = MaterialTheme.typography.caption, color = sem.subtle)
+            Text("USB / Wi-Fi 连接 · 截图 · 剪贴板", style = MaterialTheme.typography.caption, color = sem.subtle)
         }
     }
 }
@@ -163,7 +161,7 @@ private fun NavItem(destination: Destination, active: Boolean, onSelect: (Destin
             Text(destination.description, style = MaterialTheme.typography.caption, color = sem.subtle)
         }
         if (destination.primary) {
-            Text("核心", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.primary,
+            Text("常用", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.primary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colors.primary.copy(alpha = .1f)).padding(horizontal = 6.dp, vertical = 2.dp))
         }
