@@ -60,7 +60,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 internal enum class AdbTab(val label: String) {
-    CAPTURE("截图与录屏"), MIRROR("实时镜像"), LOG("日志过滤"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
+    CAPTURE("截图与录屏"), MIRROR("实时镜像"), CLIPBOARD("手机剪贴板"), LOG("日志过滤"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
     DIAGNOSTICS("崩溃与 ANR"), APP("应用操作"), PROCESS("进程与页面栈")
 }
 
@@ -106,6 +106,7 @@ fun AdbToolboxScreen() {
     var output by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
+    var showWireless by remember { mutableStateOf(false) }
     var screenshotPreview by remember { mutableStateOf<ScreenshotPreview?>(null) }
     var previewStatus by remember { mutableStateOf<String?>(null) }
     var recordingSeconds by remember { mutableStateOf(DEFAULT_RECORDING_SECONDS) }
@@ -138,6 +139,15 @@ fun AdbToolboxScreen() {
         mirrorSession.stop(if (serial.isBlank()) "选择在线设备后开始镜像" else "设备已切换，请重新开始镜像")
     }
     DisposableEffect(mirrorSession) { onDispose(mirrorSession::close) }
+
+    if (showWireless) WirelessAdbDialog(
+        selected = devices.firstOrNull { it.serial == serial },
+        onDismiss = { showWireless = false },
+        onChanged = { connected ->
+            if (connected != null) serial = connected
+            refresh()
+        },
+    )
 
     if (confirmClear) {
         AlertDialog(
@@ -186,6 +196,8 @@ fun AdbToolboxScreen() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PageTitle("ADB 工具箱", "设备调试、性能诊断、Intent 验证与故障采集")
             Spacer(Modifier.weight(1f))
+            OutlinedButton(enabled = !refreshing && !running, onClick = { showWireless = true }) { Text("无线连接") }
+            Spacer(Modifier.width(8.dp))
             OutlinedButton(enabled = !refreshing && !running, onClick = { refresh() }) { Text(if (refreshing) "刷新中…" else "刷新设备") }
         }
         if (devices.isEmpty()) {
@@ -202,6 +214,7 @@ fun AdbToolboxScreen() {
             }
         }
         when (tab) {
+            AdbTab.CLIPBOARD -> DeviceClipboardCard(devices.firstOrNull { it.serial == serial })
             AdbTab.MIRROR -> DeviceMirrorCard(
                 device = devices.firstOrNull { it.serial == serial },
                 session = mirrorSession,

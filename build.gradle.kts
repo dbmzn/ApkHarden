@@ -122,6 +122,8 @@ tasks.test {
     if (isMac) jvmArgs("--add-exports=java.desktop/sun.awt.datatransfer=ALL-UNNAMED")
     // Opt-in integration checks must not be reused from an ordinary unit-test run.
     inputs.property("deviceVerification", System.getenv("APK_HARDEN_DEVICE_TEST").orEmpty())
+    inputs.property("clipboardVerification", System.getenv("APK_HARDEN_CLIPBOARD_TEST").orEmpty())
+    inputs.property("wifiVerification", System.getenv("APK_HARDEN_WIFI_TEST").orEmpty())
     inputs.property("keychainVerification", System.getenv("APK_HARDEN_KEYCHAIN_TEST").orEmpty())
 }
 
