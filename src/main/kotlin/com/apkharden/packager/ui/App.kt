@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.apkharden.packager.signing.SigningProfileStore
 import com.apkharden.packager.ui.adb.AdbToolboxScreen
 import com.apkharden.packager.ui.adb.AdbTab
+import com.apkharden.packager.ui.barcode.BarcodeScreen
 import com.apkharden.packager.ui.archive.ArchiveScreen
 import com.apkharden.packager.ui.compare.CompareScreen
 import com.apkharden.packager.ui.device.DeviceScreen
@@ -48,6 +49,7 @@ private enum class Destination(
     MIRROR("实时镜像", "大屏查看与操控", Icons.Default.PlayArrow, adbTab = AdbTab.MIRROR),
     CLIPBOARD("手机剪贴板", "查看与复制手机文字", Icons.AutoMirrored.Filled.List, adbTab = AdbTab.CLIPBOARD),
     FILES("文件互传", "电脑与手机双向传输", Icons.Default.Info, adbTab = AdbTab.FILES),
+    BARCODE("二维码与条形码", "生成码图与识别内容", Icons.Default.Search),
     ADB("更多调试", "日志、性能与应用操作", Icons.Default.Settings),
     DEVICE("设备验证", "安装与冷启动门禁", Icons.Default.PlayArrow),
     HARDEN("APK 加固", "DEX 保护与加固签名", Icons.Default.Lock),
@@ -88,6 +90,7 @@ fun App() {
                             Destination.ARCHIVE -> ArchiveScreen()
                             Destination.SIZE -> SizeAnalysisScreen()
                             Destination.DEVICE -> DeviceScreen()
+                            Destination.BARCODE -> BarcodeScreen()
                             Destination.ADB, Destination.CAPTURE, Destination.MIRROR,
                             Destination.CLIPBOARD, Destination.FILES -> Unit
                             Destination.SIGNING -> SigningScreen(
@@ -127,7 +130,7 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit) {
         Spacer(Modifier.height(12.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             NavSection("常用工具", listOf(Destination.CAPTURE, Destination.MIRROR,
-                Destination.CLIPBOARD, Destination.FILES), selected, onSelect)
+                Destination.CLIPBOARD, Destination.FILES, Destination.BARCODE), selected, onSelect)
             Spacer(Modifier.height(12.dp))
             NavSection("设备调试", listOf(Destination.ADB, Destination.DEVICE), selected, onSelect)
             Spacer(Modifier.height(8.dp))
