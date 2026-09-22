@@ -4,7 +4,9 @@ import com.google.zxing.*
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.multi.GenericMultipleBarcodeReader
 import com.google.zxing.multi.qrcode.QRCodeMultiReader
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import java.awt.Color
+import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -43,17 +45,48 @@ internal object BarcodeTool {
         }
         return text
     }
-    fun generate(kind: CodeKind, text: String, qrSize: Int = 512): GeneratedCode {
+    fun generate(kind: CodeKind, text: String, qrSize: Int = 512,
+        centerImage: BufferedImage? = null, centerPercent: Int = 16): GeneratedCode {
         require(qrSize in 256..2048) { "二维码尺寸应为 256–2048 像素" }
+        if (centerImage != null) {
+            require(kind == CodeKind.QR) { "中心图片仅适用于二维码" }
+            require(centerPercent in 12..20) { "中心图片比例应为 12%–20%" }
+            checkSize(centerImage.width, centerImage.height)
+        }
         val content = normalizedContent(kind, text)
-        val hints = mapOf<EncodeHintType, Any>(EncodeHintType.CHARACTER_SET to "UTF-8", EncodeHintType.MARGIN to if (kind == CodeKind.QR) 4 else 12)
+        val hints = mutableMapOf<EncodeHintType, Any>(EncodeHintType.CHARACTER_SET to "UTF-8", EncodeHintType.MARGIN to if (kind == CodeKind.QR) 4 else 12)
+        if (centerImage != null) hints[EncodeHintType.ERROR_CORRECTION] = ErrorCorrectionLevel.H
         val matrix = try {
             MultiFormatWriter().encode(content, kind.format, if (kind == CodeKind.QR) qrSize else 1000,
                 if (kind == CodeKind.QR) qrSize else 280, hints)
         } catch (e: WriterException) { throw IllegalArgumentException("内容超出码图容量，请缩短后重试", e) }
         val image = BufferedImage(matrix.width, matrix.height, BufferedImage.TYPE_INT_RGB)
         for (y in 0 until matrix.height) for (x in 0 until matrix.width) image.setRGB(x, y, if (matrix[x, y]) 0xff000000.toInt() else 0xffffffff.toInt())
+        if (centerImage != null) {
+            drawCenterImage(image, centerImage, centerPercent)
+            val matches = try { decode(image).any { it.format == BarcodeFormat.QR_CODE.name && it.text == content } }
+                catch (_: IllegalStateException) { false }
+            require(matches) { "加入图片后未通过识别校验，请减小图片比例、缩短内容或移除图片后重试" }
+        }
         return GeneratedCode(image, png(image), content, kind)
+    }
+
+    private fun drawCenterImage(qr: BufferedImage, logo: BufferedImage, percent: Int) {
+        // The whole white backing, including its padding, fits inside the chosen proportion.
+        val side = minOf(qr.width, qr.height) * percent / 100
+        val padding = maxOf(2, side / 12)
+        val available = side - padding * 2
+        val scale = minOf(available.toDouble() / logo.width, available.toDouble() / logo.height)
+        val width = maxOf(1, (logo.width * scale).toInt())
+        val height = maxOf(1, (logo.height * scale).toInt())
+        qr.createGraphics().let { g ->
+            try {
+                g.color = Color.WHITE
+                g.fillRect((qr.width - side) / 2, (qr.height - side) / 2, side, side)
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                g.drawImage(logo, (qr.width - width) / 2, (qr.height - height) / 2, width, height, null)
+            } finally { g.dispose() }
+        }
     }
     fun png(image: BufferedImage): ByteArray = ByteArrayOutputStream().use { ImageIO.write(image, "png", it); it.toByteArray() }
 

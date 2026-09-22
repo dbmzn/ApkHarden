@@ -11,6 +11,42 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class BarcodeToolTest {
+    @Test fun `center logo survives PNG export and decoding at every offered size and proportion`() {
+        val logo = BufferedImage(120, 80, BufferedImage.TYPE_INT_ARGB).apply {
+            createGraphics().let { g -> try {
+                g.color = Color(25, 130, 230); g.fillRect(0, 0, 120, 80)
+                g.color = Color.WHITE; g.fillRect(25, 30, 70, 20)
+            } finally { g.dispose() } }
+        }
+        for (size in listOf(256, 512, 1024)) for (percent in listOf(12, 16, 20)) {
+            val text = "https://example.com/?name=中心图片&size=$size"
+            val result = BarcodeTool.generate(CodeKind.QR, text, size, logo, percent)
+            assertTrue(BarcodeTool.decode(BarcodeTool.readImage(result.png.inputStream())).contains(DecodedCode("QR_CODE", text)))
+            assertEquals(size, result.image.width)
+        }
+    }
+    @Test fun `center images preserve aspect ratio transparency and source pixels`() {
+        val wide = BufferedImage(200, 50, BufferedImage.TYPE_INT_ARGB).apply {
+            createGraphics().let { g -> try { g.color = Color.RED; g.fillRect(0, 0, 200, 50) } finally { g.dispose() } }
+        }
+        val result = BarcodeTool.generate(CodeKind.QR, "https://example.com", centerImage = wide)
+        assertEquals(Color.RED.rgb, result.image.getRGB(256, 256))
+        assertEquals(Color.WHITE.rgb, result.image.getRGB(256, 280))
+        assertEquals(Color.RED.rgb, wide.getRGB(100, 25))
+        val transparent = BufferedImage(40, 100, BufferedImage.TYPE_INT_ARGB)
+        val clear = BarcodeTool.generate(CodeKind.QR, "透明图片测试", centerImage = transparent)
+        assertEquals(Color.WHITE.rgb, clear.image.getRGB(256, 256))
+        assertEquals("透明图片测试", BarcodeTool.decode(clear.image).single().text)
+    }
+    @Test fun `logo options cannot apply to linear barcodes or cover arbitrary portions`() {
+        val logo = BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB)
+        assertThrows(IllegalArgumentException::class.java) { BarcodeTool.generate(CodeKind.CODE128, "ABC", centerImage = logo) }
+        for (percent in listOf(0, 11, 21, 100)) {
+            assertThrows(IllegalArgumentException::class.java) { BarcodeTool.generate(CodeKind.QR, "a", centerImage = logo, centerPercent = percent) }
+        }
+        assertArrayEquals(BarcodeTool.generate(CodeKind.QR, "plain").png,
+            BarcodeTool.generate(CodeKind.QR, "plain", centerImage = null, centerPercent = 20).png)
+    }
     @Test fun `every offered format generates a decodable PNG with exact normalized content`() {
         for (kind in CodeKind.entries) {
             val text = if (kind == CodeKind.QR) " 中文 / 文件 👋\nhttps://example.com/?a=1&b=2 " else kind.example
