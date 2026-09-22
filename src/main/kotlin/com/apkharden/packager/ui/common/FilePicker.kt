@@ -22,9 +22,10 @@ fun pickFile(
     filterName: String? = null,
     save: Boolean = false,
     extensions: List<String> = emptyList(),
+    defaultName: String? = null,
 ): String? {
     if (System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) {
-        return pickMacPath(filterName ?: "选择文件", save, extensions)
+        return pickMacPath(filterName ?: "选择文件", save, extensions, defaultName = defaultName)
     }
     NFD_Init()
     try {
@@ -37,7 +38,7 @@ fun pickFile(
                 items
             } else null
             val result = if (save)
-                NFD_SaveDialog(outPath, filters, null as CharSequence?, null as CharSequence?)
+                NFD_SaveDialog(outPath, filters, null as CharSequence?, defaultName as CharSequence?)
             else
                 NFD_OpenDialog(outPath, filters, null as CharSequence?)
             if (result != NFD_OKAY) return null
@@ -75,6 +76,7 @@ private fun pickMacPath(
     save: Boolean = false,
     extensions: List<String> = emptyList(),
     directory: Boolean = false,
+    defaultName: String? = null,
 ): String? {
     var selected: String? = null
     val showDialog = Runnable {
@@ -83,6 +85,7 @@ private fun pickMacPath(
         val dialog = FileDialog(null as Frame?, title, if (save) FileDialog.SAVE else FileDialog.LOAD)
         try {
             System.setProperty(property, directory.toString())
+            if (save && defaultName != null) dialog.file = defaultName
             if (extensions.isNotEmpty() && !directory) {
                 dialog.setFilenameFilter { _, name ->
                     extensions.any { name.endsWith(".$it", ignoreCase = true) }

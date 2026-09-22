@@ -60,7 +60,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 internal enum class AdbTab(val label: String) {
-    CAPTURE("截图与录屏"), MIRROR("实时镜像"), CLIPBOARD("手机剪贴板"), LOG("日志过滤"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
+    CAPTURE("截图与录屏"), MIRROR("实时镜像"), CLIPBOARD("手机剪贴板"), FILES("文件互传"), LOG("日志过滤"), PERFORMANCE("性能快照"), INTENT("Intent / Deep Link"),
     DIAGNOSTICS("崩溃与 ANR"), APP("应用操作"), PROCESS("进程与页面栈")
 }
 
@@ -90,12 +90,13 @@ internal fun recordingProgress(
 }
 
 @Composable
-fun AdbToolboxScreen() {
+internal fun AdbToolboxScreen(page: AdbTab? = DEFAULT_ADB_TAB) {
     var devices by remember { mutableStateOf<List<AndroidDevice>>(emptyList()) }
     var serial by remember { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
-    var tab by remember { mutableStateOf(DEFAULT_ADB_TAB) }
+    var advancedTab by remember { mutableStateOf(AdbTab.LOG) }
+    val tab = page ?: advancedTab
     var packageName by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("") }
     var permission by remember { mutableStateOf("android.permission.CAMERA") }
@@ -113,6 +114,7 @@ fun AdbToolboxScreen() {
     var recordingRemainingSeconds by remember { mutableStateOf<Int?>(null) }
     var recordingOutputFile by remember { mutableStateOf<File?>(null) }
     val mirrorSession = remember { DetachedScrcpySession() }
+    val transferHistories = remember { mutableMapOf<String, androidx.compose.runtime.snapshots.SnapshotStateList<TransferMessage>>() }
     val scope = rememberCoroutineScope()
     val sem = LocalSemantic.current
 
@@ -135,6 +137,7 @@ fun AdbToolboxScreen() {
         }
     }
     LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(tab) { output = ""; error = null; recordingOutputFile = null }
     LaunchedEffect(serial) {
         mirrorSession.stop(if (serial.isBlank()) "选择在线设备后开始镜像" else "设备已切换，请重新开始镜像")
     }
@@ -191,10 +194,17 @@ fun AdbToolboxScreen() {
         )
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
+    val pageScroll = remember(tab) { androidx.compose.foundation.ScrollState(0) }
+    Column(Modifier.fillMaxSize().then(if (tab == AdbTab.FILES) Modifier else Modifier.verticalScroll(pageScroll)).padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            PageTitle("ADB 工具箱", "设备调试、性能诊断、Intent 验证与故障采集")
+            PageTitle(page?.label ?: "更多调试", when (page) {
+                AdbTab.CAPTURE -> "捕捉设备画面，记录操作过程"
+                AdbTab.MIRROR -> "在电脑上查看和操控手机"
+                AdbTab.CLIPBOARD -> "查看手机复制的文字，随时取用"
+                AdbTab.FILES -> "浏览手机文件，在设备与电脑间传输"
+                else -> "日志、性能诊断、Intent 验证与故障采集"
+            })
             Spacer(Modifier.weight(1f))
             OutlinedButton(enabled = !refreshing && !running, onClick = { showWireless = true }) { Text("无线连接") }
             Spacer(Modifier.width(8.dp))
@@ -205,15 +215,20 @@ fun AdbToolboxScreen() {
         } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             devices.forEach { device -> DeviceChoice(device, device.serial == serial, Modifier.weight(1f)) { if (!running) serial = device.serial } }
         }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AdbTab.entries.forEach { item ->
-                OutlinedButton(onClick = { tab = item; output = ""; error = null; recordingOutputFile = null },
+        if (page == null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AdbTab.entries.filter { it !in listOf(AdbTab.CAPTURE, AdbTab.MIRROR, AdbTab.CLIPBOARD, AdbTab.FILES) }.forEach { item ->
+                OutlinedButton(onClick = { advancedTab = item },
                     colors = ButtonDefaults.outlinedButtonColors(backgroundColor = if (tab == item) MaterialTheme.colors.primary.copy(alpha = .14f) else MaterialTheme.colors.surface)) {
                     Text(item.label)
                 }
             }
         }
         when (tab) {
+            AdbTab.FILES -> FileTransferCard(
+                devices.firstOrNull { it.serial == serial },
+                transferHistories.getOrPut(serial) { mutableStateListOf() },
+                Modifier.weight(1f),
+            )
             AdbTab.CLIPBOARD -> DeviceClipboardCard(devices.firstOrNull { it.serial == serial })
             AdbTab.MIRROR -> DeviceMirrorCard(
                 device = devices.firstOrNull { it.serial == serial },

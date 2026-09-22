@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.signing.SigningProfileStore
 import com.apkharden.packager.ui.adb.AdbToolboxScreen
+import com.apkharden.packager.ui.adb.AdbTab
 import com.apkharden.packager.ui.archive.ArchiveScreen
 import com.apkharden.packager.ui.compare.CompareScreen
 import com.apkharden.packager.ui.device.DeviceScreen
@@ -41,8 +42,13 @@ private enum class Destination(
     val description: String,
     val icon: ImageVector,
     val primary: Boolean = false,
+    val adbTab: AdbTab? = null,
 ) {
-    ADB("ADB 工具箱", "无线连接与日常调试", Icons.Default.Settings, true),
+    CAPTURE("截图与录屏", "画面采集与录制", Icons.Default.Search, adbTab = AdbTab.CAPTURE),
+    MIRROR("实时镜像", "大屏查看与操控", Icons.Default.PlayArrow, adbTab = AdbTab.MIRROR),
+    CLIPBOARD("手机剪贴板", "查看与复制手机文字", Icons.AutoMirrored.Filled.List, adbTab = AdbTab.CLIPBOARD),
+    FILES("文件互传", "电脑与手机双向传输", Icons.Default.Info, adbTab = AdbTab.FILES),
+    ADB("更多调试", "日志、性能与应用操作", Icons.Default.Settings),
     DEVICE("设备验证", "安装与冷启动门禁", Icons.Default.PlayArrow),
     HARDEN("APK 加固", "DEX 保护与加固签名", Icons.Default.Lock),
     INSPECT("APK 体检", "发布风险检查", Icons.Default.Search),
@@ -56,7 +62,7 @@ private enum class Destination(
 @Composable
 fun App() {
     var dark by remember { mutableStateOf(true) }
-    var selected by remember { mutableStateOf(Destination.ADB) }
+    var selected by remember { mutableStateOf(Destination.CAPTURE) }
     val signingStore = remember { SigningProfileStore() }
     var signingProfile by remember { mutableStateOf(runCatching { signingStore.load() }.getOrNull()) }
 
@@ -68,7 +74,10 @@ fun App() {
                     TopBar(selected = selected, dark = dark, onToggleTheme = { dark = !dark })
                     Divider(color = LocalSemantic.current.cardBorder)
                     Box(Modifier.fillMaxSize()) {
-                        when (selected) {
+                        // Keep device selection and the mirror session alive across device tools.
+                        if (selected.adbTab != null || selected == Destination.ADB) {
+                            AdbToolboxScreen(page = selected.adbTab)
+                        } else when (selected) {
                             Destination.HARDEN -> HardenScreen(
                                 signingProfile = signingProfile,
                                 onConfigureSigning = { selected = Destination.SIGNING },
@@ -79,7 +88,8 @@ fun App() {
                             Destination.ARCHIVE -> ArchiveScreen()
                             Destination.SIZE -> SizeAnalysisScreen()
                             Destination.DEVICE -> DeviceScreen()
-                            Destination.ADB -> AdbToolboxScreen()
+                            Destination.ADB, Destination.CAPTURE, Destination.MIRROR,
+                            Destination.CLIPBOARD, Destination.FILES -> Unit
                             Destination.SIGNING -> SigningScreen(
                                 initialProfile = signingProfile,
                                 onSave = { profile ->
@@ -110,12 +120,15 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit) {
             Spacer(Modifier.width(11.dp))
             Column {
                 Text("ApkHarden", style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.Bold)
-                Text("Android 设备与 APK 工具箱", style = MaterialTheme.typography.caption, color = sem.subtle)
+                Text("Android 开发工具箱", style = MaterialTheme.typography.caption, color = sem.subtle)
             }
         }
 
         Spacer(Modifier.height(12.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            NavSection("常用工具", listOf(Destination.CAPTURE, Destination.MIRROR,
+                Destination.CLIPBOARD, Destination.FILES), selected, onSelect)
+            Spacer(Modifier.height(12.dp))
             NavSection("设备调试", listOf(Destination.ADB, Destination.DEVICE), selected, onSelect)
             Spacer(Modifier.height(8.dp))
             NavSection("APK 工具", listOf(Destination.INSPECT, Destination.MANIFEST, Destination.ARCHIVE,
@@ -130,7 +143,7 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit) {
         ) {
             Text("设备调试，随手可用", style = MaterialTheme.typography.subtitle2, color = MaterialTheme.colors.primary)
             Spacer(Modifier.height(3.dp))
-            Text("USB / Wi-Fi 连接 · 截图 · 剪贴板", style = MaterialTheme.typography.caption, color = sem.subtle)
+            Text("USB / Wi-Fi · 截图 · 互传", style = MaterialTheme.typography.caption, color = sem.subtle)
         }
     }
 }
