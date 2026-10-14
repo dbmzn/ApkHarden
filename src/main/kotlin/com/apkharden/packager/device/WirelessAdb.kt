@@ -13,11 +13,23 @@ internal fun wirelessAddress(value: String): String {
 }
 
 internal fun parseWirelessServices(output: String): List<WirelessService> = output.lineSequence().mapNotNull { line ->
-    val parts = line.trim().split(Regex("\\s+"))
-    val type = parts.getOrNull(1)?.removeSuffix(".")
-    if (parts.size < 3 || type !in listOf("_adb._tcp", "_adb-tls-pairing._tcp", "_adb-tls-connect._tcp")) null
-    else runCatching { WirelessService(parts[0], type!!, wirelessAddress(parts[2])) }.getOrNull()
+    // Bonjour can append " (2)" to an instance name. Split at the service type, not every space.
+    val match = Regex("^(.+?)\\s+(_adb(?:-tls-(?:pairing|connect))?\\._tcp)\\.?\\s+(\\S+)$")
+        .matchEntire(line.trim()) ?: return@mapNotNull null
+    runCatching { WirelessService(match.groupValues[1], match.groupValues[2], wirelessAddress(match.groupValues[3])) }.getOrNull()
 }.distinct().toList()
+
+internal fun normalizePairingOutput(output: String): String = output.lineSequence()
+    .map { it.trim().removePrefix("Enter pairing code: ").trim() }.joinToString("\n").trim()
+
+internal fun pairingFailureMessage(address: String, detail: String): String {
+    val message = normalizePairingOutput(detail)
+    val transportFailure = listOf("protocol fault", "timed out", "timeout", "failed to connect", "unable to start pairing client", "连接超时")
+        .any { message.contains(it, ignoreCase = true) }
+    return if (transportFailure) {
+        "已发现扫码手机，但未能完成与 $address 的配对通信。请在扫码手机上退出“正在配对”，重新开启无线调试，再扫描新二维码；若仍失败，请检查两端网络是否允许设备互访。\nADB 返回：$message"
+    } else "与扫码手机 $address 配对失败：${message.ifBlank { "请刷新二维码后重试" }}"
+}
 
 internal fun wifiIpv4(output: String): String {
     val addresses = Regex("\\binet ([0-9.]+)/[0-9]+").findAll(output).map { it.groupValues[1] }.distinct().toList()

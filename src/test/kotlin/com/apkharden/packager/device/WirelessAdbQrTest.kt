@@ -15,7 +15,7 @@ class WirelessAdbQrTest {
     private val connectAddress = "192.168.1.2:37222"
     private fun pairing(session: WirelessQrSession) = "${session.serviceName} _adb-tls-pairing._tcp $pairingAddress"
     private val connection get() = "$guid _adb-tls-connect._tcp $connectAddress"
-    private val success get() = "Successfully paired to $pairingAddress [guid=$guid]"
+    private val success get() = "Enter pairing code: Successfully paired to $pairingAddress [guid=$guid]"
     private val mdnsSerial get() = "$guid._adb-tls-connect._tcp"
 
     @Test fun `fresh credentials produce an Android ADB QR that can be decoded`() {
@@ -153,6 +153,93 @@ class WirelessAdbQrTest {
         val job = launch { flow.connect(session) {}; selected = true }
         withTimeout(2_000) { pairingStarted.await(); job.cancelAndJoin() }
         assertFalse(selected)
+    }
+
+    @Test fun `Bonjour conflict aliases use other connection ports without selecting USB`() = runBlocking {
+        val session = WirelessQrSession.create()
+        val staleAddress = "192.168.1.2:37000"
+        var connected = false
+        val attempts = mutableListOf<String>()
+        val flow = WirelessQrPairing(command = { args, _ ->
+            when (args.first()) {
+                "mdns" -> "${pairing(session)}\n$guid _adb-tls-connect._tcp $staleAddress\n$guid (2) _adb-tls-connect._tcp $connectAddress"
+                "pair" -> success
+                "devices" -> "USB-PHONE device model:other\n" + if (connected) "$connectAddress device" else ""
+                "connect" -> {
+                    attempts += args[1]
+                    if (args[1] == staleAddress) "failed to connect" else {
+                        connected = true
+                        "connected to $connectAddress"
+                    }
+                }
+                else -> error("Unexpected command $args")
+            }
+        }, pollMillis = 1)
+        assertEquals(connectAddress, flow.connect(session) {})
+        assertEquals(listOf(staleAddress, connectAddress), attempts)
+    }
+
+    @Test fun `protocol fault identifies scanned endpoint with actionable diagnostics`() = runBlocking {
+        val session = WirelessQrSession.create()
+        var target = ""
+        val flow = WirelessQrPairing(command = { args, _ ->
+            if (args.first() == "mdns") pairing(session)
+            else error("Enter pairing code: error: protocol fault (couldn't read status message): Undefined error: 0")
+        }, onTarget = { target = it })
+        val error = runCatching { flow.connect(session) {} }.exceptionOrNull()
+        assertEquals(pairingAddress, target)
+        assertTrue(error!!.message!!.contains("未能完成"))
+        assertTrue(error.message!!.contains(pairingAddress))
+        assertTrue(error.message!!.contains("网络是否允许设备互访"))
+        assertFalse(error.message!!.contains("Enter pairing code:"))
+    }
+
+    @Test fun `online Bonjour serials containing spaces remain selectable in the device list`() = runBlocking {
+        val session = WirelessQrSession.create()
+        val serial = "$guid (2)._adb-tls-connect._tcp"
+        val line = "$serial device product:phone model:Scanned_Phone"
+        assertEquals(listOf(serial, "device", "product:phone", "model:Scanned_Phone"), adbDeviceColumns(line))
+        val flow = WirelessQrPairing(command = { args, _ ->
+            when (args.first()) {
+                "mdns" -> pairing(session)
+                "pair" -> success
+                "devices" -> "USB-PHONE device model:other\n$line"
+                else -> error("Already online")
+            }
+        })
+        assertEquals(serial, flow.connect(session) {})
+    }
+
+    @Test
+    @EnabledOnOs(OS.MAC, OS.LINUX)
+    fun `real process stdin and prompt output select scanned phone while another USB phone is online`() = runBlocking {
+        val root = Files.createTempDirectory("apkharden-qr-prompt-").toFile()
+        val previous = System.getProperty("apkharden.adb.path")
+        val session = WirelessQrSession.create()
+        val fake = root.resolve("adb")
+        fake.writeText("""
+            #!/bin/sh
+            case "${'$'}1" in
+              mdns) printf '%s\n' '${session.serviceName} _adb-tls-pairing._tcp $pairingAddress' ;;
+              pair)
+                test "${'$'}2" = '$pairingAddress' || exit 1
+                printf 'Enter pairing code: '
+                IFS= read -r password
+                test "${'$'}{#password}" -eq 24 || exit 1
+                printf '%s\n' 'Successfully paired to $pairingAddress [guid=$guid]'
+                ;;
+              devices) printf '%s\n' 'List of devices attached' 'USB-PHONE device model:other' '$mdnsSerial device model:scanned' ;;
+              *) exit 1 ;;
+            esac
+        """.trimIndent())
+        check(fake.setExecutable(true))
+        try {
+            System.setProperty("apkharden.adb.path", fake.absolutePath)
+            assertEquals(mdnsSerial, WirelessQrPairing().connect(session) {})
+        } finally {
+            if (previous == null) System.clearProperty("apkharden.adb.path") else System.setProperty("apkharden.adb.path", previous)
+            root.deleteRecursively()
+        }
     }
 
     @Test

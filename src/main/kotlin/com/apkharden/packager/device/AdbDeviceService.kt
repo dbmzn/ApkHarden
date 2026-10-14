@@ -26,6 +26,14 @@ internal data class AndroidDevice(
     val pageSize: String = "-",
 )
 
+internal fun adbDeviceColumns(line: String): List<String> {
+    // Wireless mDNS serials can contain Bonjour's " (2)" collision suffix.
+    val match = Regex("^(.+?)\\s+(device|offline|unauthorized|recovery|sideload|bootloader|connecting|host)(?:\\s+(.*))?$")
+        .matchEntire(line.trim()) ?: return line.trim().split(Regex("\\s+"))
+    return listOf(match.groupValues[1], match.groupValues[2]) +
+        match.groupValues[3].split(Regex("\\s+")).filter(String::isNotBlank)
+}
+
 internal data class DeviceLaunchResult(
     val device: AndroidDevice,
     val packageName: String,
@@ -244,7 +252,7 @@ internal object AdbDeviceService {
         return output.lineSequence().drop(1).mapNotNull { line ->
             val value = line.trim()
             if (value.isEmpty()) return@mapNotNull null
-            val parts = value.split(Regex("\\s+"))
+            val parts = adbDeviceColumns(value)
             if (parts.size < 2) return@mapNotNull null
             val serial = parts[0]
             val state = parts[1]

@@ -26,7 +26,10 @@ internal class WirelessQrSession private constructor(val serviceName: String, va
 internal enum class WirelessQrStage { WAITING, PAIRING, CONNECTING }
 
 private fun WirelessService.instanceName(): String = name.removeSuffix(".")
-    .removeSuffix(".$type.local").removeSuffix(".$type")
+    .removeSuffix(".$type.local").removeSuffix(".$type").replace(Regex(" \\([0-9]+\\)$"), "")
+
+private fun wirelessGuid(serial: String): String = serial.removeSuffix(".").removeSuffix(".local")
+    .removeSuffix("._adb-tls-connect._tcp").replace(Regex(" \\([0-9]+\\)$"), "")
 
 /** QR scan advertises the requested service on the phone; the desktop only discovers it.
  * After pairing, match the returned GUID, never just the phone's IP or a newly listed device.
@@ -38,6 +41,7 @@ internal class WirelessQrPairing(
     private val scanTimeoutMillis: Long = 120_000,
     private val connectTimeoutMillis: Long = 30_000,
     private val pollMillis: Long = 1_000,
+    private val onTarget: (String) -> Unit = {},
 ) {
     suspend fun connect(session: WirelessQrSession, onStage: (WirelessQrStage) -> Unit): String {
         onStage(WirelessQrStage.WAITING)
@@ -54,32 +58,43 @@ internal class WirelessQrPairing(
         } ?: error("二维码已过期，请刷新后重新扫描。若一直未发现手机，请检查同一 Wi-Fi、无线调试及网络是否允许设备发现，或改用配对码。")
 
         currentCoroutineContext().ensureActive()
+        onTarget(pairingService.address)
         onStage(WirelessQrStage.PAIRING)
-        val output = command(listOf("pair", pairingService.address), session.password)
-            .replace(session.password, "******")
+        val output = try {
+            normalizePairingOutput(command(listOf("pair", pairingService.address), session.password))
+                .replace(session.password, "******")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error(pairingFailureMessage(pairingService.address, (e.message ?: "ADB 配对失败").replace(session.password, "******")))
+        }
         val success = output.lineSequence().map(String::trim).firstOrNull { it.startsWith("Successfully paired to ") }
-        check(success != null) { output.ifBlank { "扫码配对失败，请刷新二维码后重试" } }
+        check(success != null) { pairingFailureMessage(pairingService.address, output) }
         val guid = Regex("\\[guid=([A-Za-z0-9_-]+)]").find(success)?.groupValues?.get(1)
             ?: error("配对已完成，但 ADB 未返回设备标识。请刷新设备列表或在“配对码 / 手动连接”中连接。")
 
         onStage(WirelessQrStage.CONNECTING)
         var lastFailure: String? = null
+        var connectAttempt = 0
         val serial = withTimeoutOrNull(connectTimeoutMillis) {
             var connected: String? = null
             while (connected == null) {
                 currentCoroutineContext().ensureActive()
                 val services = discover().filter { it.type == "_adb-tls-connect._tcp" && it.instanceName() == guid }
                 val addresses = services.map { it.address }.toSet()
-                connected = command(listOf("devices", "-l"), null).lineSequence().map { it.trim().split(Regex("\\s+")) }
+                connected = command(listOf("devices", "-l"), null).lineSequence().map(::adbDeviceColumns)
                     .firstOrNull { parts ->
                         parts.getOrNull(1) == "device" && (parts[0] in addresses ||
-                            parts[0].removeSuffix(".").removeSuffix(".local").removeSuffix("._adb-tls-connect._tcp") == guid)
+                            wirelessGuid(parts[0]) == guid)
                     }?.first()
                 if (connected == null) {
                     // ADB normally auto-connects. Explicitly connect its matching TLS service as a fallback.
-                    services.firstOrNull()?.let { service ->
+                    services.takeIf { it.isNotEmpty() }?.let { candidates ->
+                        val service = candidates[connectAttempt++ % candidates.size]
                         try {
-                            val result = command(listOf("connect", service.address), null)
+                            // One stale discovery endpoint must not consume the whole connection window.
+                            val result = withTimeoutOrNull(5_000) { command(listOf("connect", service.address), null) }
+                                ?: "连接 ${service.address} 超时"
                             if (!result.lineSequence().any { it.startsWith("connected to ") || it.startsWith("already connected to ") }) {
                                 lastFailure = result
                             }

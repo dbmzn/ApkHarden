@@ -132,6 +132,7 @@ private fun WirelessQrContent(onChanged: (String?) -> Unit) {
     var failure by remember(session) { mutableStateOf(false) }
     var running by remember(session) { mutableStateOf(true) }
     var stage by remember(session) { mutableStateOf(WirelessQrStage.WAITING) }
+    var targetAddress by remember(session) { mutableStateOf("") }
 
     // Cancelling this effect also interrupts any running ADB process. Old attempts cannot update the UI.
     LaunchedEffect(session) {
@@ -139,7 +140,7 @@ private fun WirelessQrContent(onChanged: (String?) -> Unit) {
             bitmap = withContext(Dispatchers.IO) {
                 BarcodeTool.generate(CodeKind.QR, session.payload).image.toComposeImageBitmap()
             }
-            val serial = WirelessQrPairing().connect(session) {
+            val serial = WirelessQrPairing(onTarget = { targetAddress = it }).connect(session) {
                 stage = it
                 message = when (it) {
                     WirelessQrStage.WAITING -> "等待手机扫码，二维码 2 分钟内有效"
@@ -164,6 +165,7 @@ private fun WirelessQrContent(onChanged: (String?) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Android 11+：用手机无线调试中的扫码入口扫描下方二维码", style = MaterialTheme.typography.subtitle1)
         Text("开发者选项 → 无线调试 → 使用二维码配对", style = MaterialTheme.typography.body2)
+        if (targetAddress.isNotBlank()) Text("本次扫码手机的配对地址：$targetAddress", style = MaterialTheme.typography.caption)
         Box(Modifier.size(280.dp), contentAlignment = Alignment.Center) {
             val code = bitmap
             if (code != null && stage == WirelessQrStage.WAITING) {

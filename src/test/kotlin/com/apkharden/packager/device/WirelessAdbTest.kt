@@ -27,6 +27,14 @@ class WirelessAdbTest {
         assertEquals("192.168.1.2:37111", found[0].address)
         assertEquals("_adb-tls-connect._tcp", found[1].type)
     }
+    @Test fun `discovery preserves names with spaces and Bonjour conflict numbers`() {
+        val found = parseWirelessServices("""
+            adb-phone (2) _adb-tls-connect._tcp 192.168.11.17:33189
+            studio-session (3) _adb-tls-pairing._tcp. 192.168.11.17:37563
+        """.trimIndent())
+        assertEquals(listOf("adb-phone (2)", "studio-session (3)"), found.map { it.name })
+        assertEquals(listOf("192.168.11.17:33189", "192.168.11.17:37563"), found.map { it.address })
+    }
     @Test fun `legacy address requires an unambiguous wifi IPv4 address`() {
         assertEquals("192.168.11.233", wifiIpv4("inet 192.168.11.233/23 brd 192.168.11.255 scope global wlan0"))
         assertThrows(IllegalArgumentException::class.java) { wifiIpv4("no address") }
