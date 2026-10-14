@@ -14,8 +14,9 @@ internal fun wirelessAddress(value: String): String {
 
 internal fun parseWirelessServices(output: String): List<WirelessService> = output.lineSequence().mapNotNull { line ->
     val parts = line.trim().split(Regex("\\s+"))
-    if (parts.size < 3 || parts[1] !in listOf("_adb._tcp", "_adb-tls-pairing._tcp", "_adb-tls-connect._tcp")) null
-    else runCatching { WirelessService(parts[0], parts[1], wirelessAddress(parts[2])) }.getOrNull()
+    val type = parts.getOrNull(1)?.removeSuffix(".")
+    if (parts.size < 3 || type !in listOf("_adb._tcp", "_adb-tls-pairing._tcp", "_adb-tls-connect._tcp")) null
+    else runCatching { WirelessService(parts[0], type!!, wirelessAddress(parts[2])) }.getOrNull()
 }.distinct().toList()
 
 internal fun wifiIpv4(output: String): String {
@@ -27,7 +28,7 @@ internal fun wifiIpv4(output: String): String {
 internal fun isWirelessSerial(serial: String): Boolean = ':' in serial || "_adb-tls-connect._tcp" in serial
 
 internal object WirelessAdb {
-    private fun run(args: List<String>, input: String? = null): String {
+    internal fun run(args: List<String>, input: String? = null): String {
         val process = ProcessBuilder(listOf(AdbDeviceService.adbExecutable()) + args).redirectErrorStream(true).start()
         val captured = AtomicReference("")
         val reader = Thread({ captured.set(process.inputStream.bufferedReader().use { it.readText() }) }, "apkharden-wireless-adb-output")
