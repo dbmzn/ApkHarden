@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.barcode
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -22,6 +25,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.*
 import com.apkharden.packager.ui.adb.copyImageToClipboard
+import com.apkharden.packager.ui.common.ToolPanel
+import com.apkharden.packager.ui.common.ToolIcons
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.inspect.PageTitle
 import com.apkharden.packager.ui.inspect.ValueCard
@@ -83,7 +88,7 @@ internal fun BarcodeScreen() {
         if (!decoding) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 Column(Modifier.weight(1f)) {
-                    ValueCard {
+                    ToolPanel(Modifier.fillMaxWidth(), sem.formBg) {
                         Text("内容与格式", style = MaterialTheme.typography.subtitle1)
                         Spacer(Modifier.height(12.dp))
                         Box {
@@ -126,8 +131,12 @@ internal fun BarcodeScreen() {
                         Text("图片预览", style = MaterialTheme.typography.subtitle1)
                         Spacer(Modifier.height(14.dp))
                         val code = generated
-                        Box(Modifier.fillMaxWidth().height(270.dp).clip(RoundedCornerShape(10.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-                            if (code == null) Text("生成后在这里预览", color = Color.Gray, style = MaterialTheme.typography.body2)
+                        Box(Modifier.fillMaxWidth().height(270.dp).clip(RoundedCornerShape(22.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                            if (code == null) Column(horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Icon(ToolIcons.Code, null, Modifier.size(56.dp), tint = Color(0xFF60687A))
+                                Text("生成后在这里预览", color = Color(0xFF60687A), style = MaterialTheme.typography.body2)
+                            }
                             else {
                                 val bitmap = remember(code) { code.image.toComposeImageBitmap() }
                                 Image(bitmap, "生成的${code.kind.label}", Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
@@ -212,7 +221,7 @@ internal fun BarcodeScreen() {
                 sourceImage?.let { input ->
                     Spacer(Modifier.height(14.dp))
                     val bitmap = remember(input) { input.toComposeImageBitmap() }
-                    Image(bitmap, "待识别图片", Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(10.dp)).background(Color.White).padding(12.dp), contentScale = ContentScale.Fit)
+                    Image(bitmap, "待识别图片", Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(22.dp)).background(Color.White).padding(12.dp), contentScale = ContentScale.Fit)
                     Text(sourceLabel, color = sem.subtle, style = MaterialTheme.typography.caption, modifier = Modifier.padding(top = 8.dp))
                 }
             }

@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.archive
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -13,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.*
+import com.apkharden.packager.ui.common.ImportWorkspace
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.inspect.PageTitle
 import com.apkharden.packager.ui.inspect.SectionTitle
@@ -37,8 +41,13 @@ fun ArchiveScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageTitle("APK 文件浏览器", "无需反编译，查看 DEX、SO、资源、Assets 的目录与大小占比")
-        ValueCard {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ImportWorkspace(
+            empty = report == null, title = "看清 APK 的\n内容组成",
+            description = "从整体体积到具体文件，逐层查看。",
+            features = listOf("分类概览" to "DEX、SO、资源与 Assets 占比",
+                "目录分布" to "定位占用空间较大的目录",
+                "文件清单" to "按路径搜索，按解压大小排序"),
+        ) {
                 OutlinedTextField(path, { path = it; report = null }, label = { Text("APK 文件") },
                     modifier = Modifier.weight(1f), singleLine = true)
                 OutlinedButton(onClick = { pickFile("APK 文件", extensions = listOf("apk"))?.let { path = it; report = null } }) { Text("浏览") }
@@ -50,7 +59,6 @@ fun ArchiveScreen() {
                         running = false
                     }
                 }) { Text(if (running) "读取中…" else "打开 APK") }
-            }
         }
         error?.let { Text("读取失败：$it", color = MaterialTheme.colors.error) }
         report?.let { value ->

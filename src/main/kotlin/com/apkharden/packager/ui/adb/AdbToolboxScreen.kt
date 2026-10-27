@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.adb
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +35,9 @@ import androidx.compose.ui.window.rememberDialogState
 import com.apkharden.packager.device.AdbDeviceService
 import com.apkharden.packager.device.AndroidDevice
 import com.apkharden.packager.device.IntentLaunchRequest
+import com.apkharden.packager.ui.common.ToolPanel
+import com.apkharden.packager.ui.common.ToolIcons
+import com.apkharden.packager.ui.common.FeatureLine
 import com.apkharden.packager.ui.inspect.PageTitle
 import com.apkharden.packager.ui.inspect.ValueCard
 import com.apkharden.packager.ui.theme.LocalSemantic
@@ -204,16 +210,23 @@ internal fun AdbToolboxScreen(page: AdbTab? = DEFAULT_ADB_TAB) {
                 AdbTab.CLIPBOARD -> "查看手机复制的文字，随时取用"
                 AdbTab.FILES -> "浏览手机文件，在设备与电脑间传输"
                 else -> "日志、性能诊断、Intent 验证与故障采集"
-            })
-            Spacer(Modifier.weight(1f))
+            }, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(16.dp))
             OutlinedButton(enabled = !refreshing && !running, onClick = { showWireless = true }) { Text("无线连接") }
             Spacer(Modifier.width(8.dp))
             OutlinedButton(enabled = !refreshing && !running, onClick = { refresh() }) { Text(if (refreshing) "刷新中…" else "刷新设备") }
         }
         if (devices.isEmpty()) {
-            ValueCard { Text(if (refreshing) "正在发现设备…" else "未发现在线设备", color = sem.subtle) }
-        } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            devices.forEach { device -> DeviceChoice(device, device.serial == serial, Modifier.weight(1f)) { if (!running) serial = device.serial } }
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(sem.cardBg).padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Icon(ToolIcons.Device, null, Modifier.size(26.dp), tint = sem.subtle)
+                Column {
+                    Text(if (refreshing) "正在发现设备…" else "连接设备后开始使用", style = MaterialTheme.typography.subtitle2)
+                    Text("通过 USB 连接并允许调试，或点击右上角「无线连接」。", style = MaterialTheme.typography.caption, color = sem.subtle)
+                }
+            }
+        } else Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            devices.forEach { device -> DeviceChoice(device, device.serial == serial, Modifier.width(290.dp)) { if (!running) serial = device.serial } }
         }
         if (page == null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AdbTab.entries.filter { it !in listOf(AdbTab.CAPTURE, AdbTab.MIRROR, AdbTab.CLIPBOARD, AdbTab.FILES) }.forEach { item ->
@@ -243,96 +256,112 @@ internal fun AdbToolboxScreen(page: AdbTab? = DEFAULT_ADB_TAB) {
                     runAction("正在读取日志…") { AdbDeviceService.logcat(it, packageName.trim(), filter.trim()) }
                 }) { Text("读取最近 800 行日志") }
             }
-            AdbTab.CAPTURE -> ValueCard {
-                Text("截图保存为 PNG；录屏可选 5、10 或 15 秒并保存为 MP4。", color = sem.subtle, style = MaterialTheme.typography.body2)
-                Spacer(Modifier.height(10.dp))
-                Text("录制时长", color = sem.subtle, style = MaterialTheme.typography.body2)
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RECORDING_DURATION_OPTIONS.forEach { seconds ->
-                        OutlinedButton(
-                            enabled = !running,
-                            modifier = Modifier.weight(1f),
-                            onClick = { recordingSeconds = seconds },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                backgroundColor = if (recordingSeconds == seconds) {
-                                    MaterialTheme.colors.primary.copy(alpha = .14f)
-                                } else {
-                                    MaterialTheme.colors.surface
-                                },
-                            ),
-                        ) { Text("$seconds 秒") }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.weight(1f), onClick = {
-                        val device = devices.firstOrNull { it.serial == serial } ?: return@Button
-                        running = true; error = null; output = "正在截取设备屏幕…"; recordingOutputFile = null
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    decodeScreenshotPreview(AdbDeviceService.captureScreenshot(device))
-                                }
-                            }
-                                .onSuccess { preview ->
-                                    screenshotPreview = preview
-                                    previewStatus = null
-                                    output = "截图完成，正在预览"
-                                }.onFailure { error = friendly(it); output = "截图失败" }
-                            running = false
-                        }
-                    }) { Text("设备截图") }
-                    Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.weight(1f), onClick = {
-                        val device = devices.firstOrNull { it.serial == serial } ?: return@Button
-                        val file = captureFile("screenrecord", "mp4")
-                        val selectedRecordingSeconds = recordingSeconds
-                        running = true
-                        error = null
-                        recordingOutputFile = null
-                        recordingRemainingSeconds = selectedRecordingSeconds
-                        output = recordingStatusMessage(selectedRecordingSeconds)
-                        scope.launch {
-                            val recording = async(Dispatchers.IO) {
+            AdbTab.CAPTURE -> Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    ToolPanel(Modifier.weight(1f).fillMaxHeight(), sem.accentBg, sem.onAccent) {
+                        Icon(ToolIcons.Capture, null, Modifier.size(36.dp))
+                        Spacer(Modifier.height(24.dp))
+                        Text("留住这一帧", style = MaterialTheme.typography.h4)
+                        Spacer(Modifier.height(12.dp))
+                        Text("截取设备当前画面，预览后可标注、复制或保存。", style = MaterialTheme.typography.body1)
+                        Spacer(Modifier.height(22.dp))
+                        Text("PNG 原图 · 矩形与箭头标注", style = MaterialTheme.typography.caption)
+                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(24.dp))
+                        Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.fillMaxWidth(), onClick = {
+                            val device = devices.firstOrNull { it.serial == serial } ?: return@Button
+                            running = true; error = null; output = "正在截取设备屏幕…"; recordingOutputFile = null
+                            scope.launch {
                                 runCatching {
-                                    val mode = AdbDeviceService.recordScreen(device, file, selectedRecordingSeconds)
-                                    val modeLabel = when (mode) {
-                                        com.apkharden.packager.device.ScreenRecordingMode.DEVICE -> "设备原生模式"
-                                        com.apkharden.packager.device.ScreenRecordingMode.SCRCPY -> "高帧率兼容模式（最高 30 FPS）"
-                                        com.apkharden.packager.device.ScreenRecordingMode.SCREENSHOT_COMPATIBILITY ->
-                                            "低帧率保底模式（4 FPS）"
-                                    }
-                                    "录屏已保存（$modeLabel）：${file.absolutePath}"
-                                }
-                            }
-                            try {
-                                var remaining = selectedRecordingSeconds
-                                while (!recording.isCompleted && remaining > 0) {
-                                    delay(1_000)
-                                    if (!recording.isCompleted) {
-                                        remaining--
-                                        recordingRemainingSeconds = remaining
-                                        output = recordingStatusMessage(remaining)
+                                    withContext(Dispatchers.IO) {
+                                        decodeScreenshotPreview(AdbDeviceService.captureScreenshot(device))
                                     }
                                 }
-                                recording.await()
-                                    .onSuccess {
-                                        output = it
-                                        recordingOutputFile = file
-                                    }
-                                    .onFailure {
-                                        output = ""
-                                        error = friendly(it)
-                                    }
-                            } finally {
-                                recordingRemainingSeconds = null
+                                    .onSuccess { preview ->
+                                        screenshotPreview = preview
+                                        previewStatus = null
+                                        output = "截图完成，正在预览"
+                                    }.onFailure { error = friendly(it); output = "截图失败" }
                                 running = false
                             }
+                        }) { Text("设备截图") }
+                    }
+                    ToolPanel(Modifier.weight(1f).fillMaxHeight(), sem.secondaryBg, sem.onSecondaryPanel) {
+                        Icon(ToolIcons.Video, null, Modifier.size(36.dp))
+                        Spacer(Modifier.height(24.dp))
+                        Text("记录操作过程", style = MaterialTheme.typography.h4)
+                        Spacer(Modifier.height(12.dp))
+                        Text("选择录制时长，完成后自动保存为 MP4。", style = MaterialTheme.typography.body1)
+                        Spacer(Modifier.height(18.dp))
+                        Text("录制时长", style = MaterialTheme.typography.caption)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            RECORDING_DURATION_OPTIONS.forEach { seconds ->
+                                OutlinedButton(
+                                    enabled = !running,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { recordingSeconds = seconds },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        backgroundColor = if (recordingSeconds == seconds) {
+                                            MaterialTheme.colors.primary.copy(alpha = .14f)
+                                        } else {
+                                            MaterialTheme.colors.surface
+                                        },
+                                    ),
+                                ) { Text("$seconds 秒") }
+                            }
                         }
-                    }) { Text(recordingButtonLabel(recordingRemainingSeconds, recordingSeconds)) }
+                        Spacer(Modifier.height(14.dp))
+                        Button(enabled = !running && serial.isNotBlank(), modifier = Modifier.fillMaxWidth(), onClick = {
+                            val device = devices.firstOrNull { it.serial == serial } ?: return@Button
+                            val file = captureFile("screenrecord", "mp4")
+                            val selectedRecordingSeconds = recordingSeconds
+                            running = true
+                            error = null
+                            recordingOutputFile = null
+                            recordingRemainingSeconds = selectedRecordingSeconds
+                            output = recordingStatusMessage(selectedRecordingSeconds)
+                            scope.launch {
+                                val recording = async(Dispatchers.IO) {
+                                    runCatching {
+                                        val mode = AdbDeviceService.recordScreen(device, file, selectedRecordingSeconds)
+                                        val modeLabel = when (mode) {
+                                            com.apkharden.packager.device.ScreenRecordingMode.DEVICE -> "设备原生模式"
+                                            com.apkharden.packager.device.ScreenRecordingMode.SCRCPY -> "高帧率兼容模式（最高 30 FPS）"
+                                            com.apkharden.packager.device.ScreenRecordingMode.SCREENSHOT_COMPATIBILITY ->
+                                                "低帧率保底模式（4 FPS）"
+                                        }
+                                        "录屏已保存（$modeLabel）：${file.absolutePath}"
+                                    }
+                                }
+                                try {
+                                    var remaining = selectedRecordingSeconds
+                                    while (!recording.isCompleted && remaining > 0) {
+                                        delay(1_000)
+                                        if (!recording.isCompleted) {
+                                            remaining--
+                                            recordingRemainingSeconds = remaining
+                                            output = recordingStatusMessage(remaining)
+                                        }
+                                    }
+                                    recording.await()
+                                        .onSuccess {
+                                            output = it
+                                            recordingOutputFile = file
+                                        }
+                                        .onFailure {
+                                            output = ""
+                                            error = friendly(it)
+                                        }
+                                } finally {
+                                    recordingRemainingSeconds = null
+                                    running = false
+                                }
+                            }
+                        }) { Text(recordingButtonLabel(recordingRemainingSeconds, recordingSeconds)) }
+                    }
                 }
                 recordingRemainingSeconds?.let { remaining ->
                     Spacer(Modifier.height(12.dp))
@@ -346,6 +375,9 @@ internal fun AdbToolboxScreen(page: AdbTab? = DEFAULT_ADB_TAB) {
                         color = MaterialTheme.colors.primary,
                         style = MaterialTheme.typography.body2,
                     )
+                }
+                ToolPanel(Modifier.fillMaxWidth()) {
+                    FeatureLine(ToolIcons.Folder, "文件保存到下载目录", "截图可先预览和编辑；录屏完成后可打开所在文件夹。")
                 }
             }
             AdbTab.PERFORMANCE -> ValueCard {
@@ -494,7 +526,7 @@ private fun DeviceMirrorCard(device: AndroidDevice?, session: DetachedScrcpySess
         }
         Spacer(Modifier.height(10.dp))
         val statusColor = when (phase) {
-            MirrorPhase.RUNNING -> Color(0xFF34C780)
+            MirrorPhase.RUNNING -> LocalSemantic.current.advice
             MirrorPhase.ERROR -> MaterialTheme.colors.error
             MirrorPhase.STARTING -> MaterialTheme.colors.primary
             MirrorPhase.IDLE -> LocalSemantic.current.subtle
@@ -502,9 +534,8 @@ private fun DeviceMirrorCard(device: AndroidDevice?, session: DetachedScrcpySess
         Text(status, color = statusColor, style = MaterialTheme.typography.body2)
         Spacer(Modifier.height(10.dp))
         Box(
-            Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp))
-                .background(Color.Black)
-                .border(1.dp, LocalSemantic.current.cardBorder, RoundedCornerShape(12.dp)),
+            Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(24.dp))
+                .background(LocalSemantic.current.formBg),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -513,7 +544,7 @@ private fun DeviceMirrorCard(device: AndroidDevice?, session: DetachedScrcpySess
                     phase == MirrorPhase.RUNNING -> "镜像正在独立窗口中运行\n已按可用屏幕最大尺寸展示，不会超出任务栏和桌面"
                     else -> "点击“开始镜像”连接 ${device.model}\n成功后将按设备比例铺满当前可用屏幕"
                 },
-                color = Color(0xFF8D96A8),
+                color = LocalSemantic.current.subtle,
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -528,8 +559,8 @@ private fun DeviceMirrorCard(device: AndroidDevice?, session: DetachedScrcpySess
 @Composable
 private fun DeviceChoice(device: AndroidDevice, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val sem = LocalSemantic.current
-    Row(modifier.clip(RoundedCornerShape(11.dp)).background(if (selected) MaterialTheme.colors.primary.copy(alpha = .12f) else sem.cardBg)
-        .border(1.dp, if (selected) MaterialTheme.colors.primary else sem.cardBorder, RoundedCornerShape(11.dp))
+    Row(modifier.clip(RoundedCornerShape(20.dp)).background(if (selected) MaterialTheme.colors.primary.copy(alpha = .12f) else sem.cardBg)
+        .border(1.dp, if (selected) MaterialTheme.colors.primary else sem.cardBorder, RoundedCornerShape(20.dp))
         .clickable(onClick = onClick).padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) { Text(device.model, style = MaterialTheme.typography.subtitle2); Text("API ${device.api} · ${device.serial}", style = MaterialTheme.typography.caption, color = sem.subtle) }
         Text(if (device.state == "device") "在线" else device.state, color = if (device.state == "device") sem.advice else MaterialTheme.colors.error,

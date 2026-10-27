@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.device
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,8 +68,8 @@ fun DeviceScreen() {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            PageTitle("设备安装验证", "连接真机或模拟器，一键完成覆盖安装、冷启动和闪退门禁")
-            Spacer(Modifier.weight(1f))
+            PageTitle("设备安装验证", "连接真机或模拟器，一键完成覆盖安装、冷启动和闪退门禁", Modifier.weight(1f))
+            Spacer(Modifier.width(16.dp))
             OutlinedButton(enabled = !refreshing && !running, onClick = { refresh() }) {
                 Text(if (refreshing) "刷新中…" else "刷新设备")
             }
@@ -162,9 +165,9 @@ private fun DeviceCard(device: AndroidDevice, selected: Boolean, modifier: Modif
     val sem = LocalSemantic.current
     val accent = if (device.state == "device") MaterialTheme.colors.primary else MaterialTheme.colors.error
     Column(
-        modifier.widthIn(min = 210.dp).clip(RoundedCornerShape(14.dp))
+        modifier.widthIn(min = 210.dp).clip(RoundedCornerShape(24.dp))
             .background(if (selected) accent.copy(alpha = .12f) else sem.cardBg)
-            .border(1.dp, if (selected) accent else sem.cardBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, if (selected) accent else sem.cardBorder, RoundedCornerShape(24.dp))
             .clickable(onClick = onClick).padding(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

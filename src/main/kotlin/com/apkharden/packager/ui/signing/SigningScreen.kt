@@ -10,19 +10,23 @@ import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.KeystoreUtil
 import com.apkharden.packager.signing.PlatformSecrets
 import com.apkharden.packager.signing.SigningProfile
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolPanel
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import com.apkharden.packager.ui.common.pickFile
+import com.apkharden.packager.ui.inspect.PageTitle
 import com.apkharden.packager.ui.theme.LocalSemantic
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 @Composable
 fun SigningScreen(
@@ -45,127 +49,131 @@ fun SigningScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("签名百宝箱", style = MaterialTheme.typography.h5, color = MaterialTheme.colors.onBackground)
-        Text(
-            "集中管理正式签名，查看证书指纹，并比较 APK 是否使用同一签名",
-            style = MaterialTheme.typography.caption,
-            color = sem.subtle,
-        )
-        Text(
-            PlatformSecrets.description,
-            style = MaterialTheme.typography.body2,
-            color = sem.advice,
-            modifier = Modifier.fillMaxWidth()
-                .background(sem.advice.copy(alpha = 0.08f))
-                .border(1.dp, sem.advice.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-                .padding(10.dp),
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            OutlinedTextField(
-                value = keystorePath,
-                onValueChange = { keystorePath = it; status = null },
-                label = { Text("Keystore") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(10.dp),
-                colors = signingFieldColors(),
-            )
-            OutlinedButton(
-                onClick = {
-                    pickFile("Keystore", extensions = listOf("jks", "keystore", "p12", "pfx"))
-                        ?.let { keystorePath = it; status = null }
-                },
-                shape = RoundedCornerShape(10.dp),
-            ) { Text("浏览") }
-        }
-        signingField("别名 alias", alias) { alias = it; status = null }
-        passwordField("keystore 密码", storePassword, showPasswords) {
-            storePassword = it; status = null
-        }
-        passwordField("key 密码", keyPassword, showPasswords) {
-            keyPassword = it; status = null
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = showPasswords, onCheckedChange = { showPasswords = it })
-            Text("显示密码", style = MaterialTheme.typography.body2)
-        }
-
-        if (status != null) {
+        PageTitle("签名百宝箱", "管理正式签名，查看证书指纹，比较 APK 签名")
+        ToolPanel(Modifier.fillMaxWidth(), sem.formBg) {
+            Text("正式签名配置", style = MaterialTheme.typography.h6)
+            Spacer(Modifier.height(14.dp))
             Text(
-                status!!,
+                PlatformSecrets.description,
                 style = MaterialTheme.typography.body2,
-                color = if (statusIsError) MaterialTheme.colors.error else sem.advice,
+                color = sem.advice,
+                modifier = Modifier.fillMaxWidth()
+                    .background(sem.advice.copy(alpha = 0.08f))
+                    .border(1.dp, sem.advice.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                    .padding(10.dp),
             )
-        } else if (initialProfile != null) {
-            val fingerprint = initialProfile.certificateSha256
-            Text(
-                if (fingerprint.isBlank()) "已保存签名配置" else "已保存 · 证书 SHA-256: ${fingerprint.chunked(2).joinToString(":")}",
-                style = MaterialTheme.typography.caption,
-                color = sem.subtle,
-            )
-        }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                enabled = !saving && keystorePath.isNotBlank() && alias.isNotBlank() &&
-                    storePassword.isNotEmpty() && keyPassword.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(10.dp),
-                elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
-                onClick = {
-                    saving = true
-                    status = null
-                    scope.launch {
-                        val result = runCatching {
-                            val file = File(keystorePath)
-                            require(file.isFile) { "签名文件不存在" }
-                            val credentials = withContext(Dispatchers.IO) {
-                                KeystoreUtil.load(file, storePassword, alias, keyPassword)
-                            }
-                            val profile = SigningProfile(
-                                keystorePath = file.absolutePath,
-                                alias = alias.trim(),
-                                storePassword = storePassword,
-                                keyPassword = keyPassword,
-                                certificateSha256 = KeystoreUtil.expectedSigHash(credentials),
-                            )
-                            onSave(profile).getOrThrow()
-                        }
-                        statusIsError = result.isFailure
-                        status = result.fold(
-                            onSuccess = { "签名验证通过并已安全保存，后续加固会自动使用此签名" },
-                            onFailure = { "保存失败：${friendlyMessage(it)}" },
-                        )
-                        saving = false
-                    }
-                },
-            ) { Text(if (saving) "验证并保存中…" else "验证并保存") }
-
-            if (initialProfile != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    value = keystorePath,
+                    onValueChange = { keystorePath = it; status = null },
+                    label = { Text("Keystore") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = signingFieldColors(),
+                )
                 OutlinedButton(
-                    enabled = !saving,
-                    shape = RoundedCornerShape(10.dp),
                     onClick = {
-                        val result = onClear()
-                        statusIsError = result.isFailure
-                        status = result.fold(
-                            onSuccess = {
-                                keystorePath = ""
-                                alias = ""
-                                storePassword = ""
-                                keyPassword = ""
-                                "已清除签名配置"
-                            },
-                            onFailure = { "清除失败：${friendlyMessage(it)}" },
-                        )
+                        pickFile("Keystore", extensions = listOf("jks", "keystore", "p12", "pfx"))
+                            ?.let { keystorePath = it; status = null }
                     },
-                ) { Text("清除配置") }
+                    shape = RoundedCornerShape(20.dp),
+                ) { Text("浏览") }
+            }
+            Spacer(Modifier.height(12.dp))
+            signingField("别名 alias", alias) { alias = it; status = null }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.weight(1f)) {
+                    passwordField("keystore 密码", storePassword, showPasswords) { storePassword = it; status = null }
+                }
+                Box(Modifier.weight(1f)) {
+                    passwordField("key 密码", keyPassword, showPasswords) { keyPassword = it; status = null }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = showPasswords, onCheckedChange = { showPasswords = it })
+                Text("显示密码", style = MaterialTheme.typography.body2)
+            }
+
+            if (status != null) {
+                Text(
+                    status!!,
+                    style = MaterialTheme.typography.body2,
+                    color = if (statusIsError) MaterialTheme.colors.error else sem.advice,
+                )
+            } else if (initialProfile != null) {
+                val fingerprint = initialProfile.certificateSha256
+                Text(
+                    if (fingerprint.isBlank()) "已保存签名配置" else "已保存 · 证书 SHA-256: ${fingerprint.chunked(2).joinToString(":")}",
+                    style = MaterialTheme.typography.caption,
+                    color = sem.subtle,
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    enabled = !saving && keystorePath.isNotBlank() && alias.isNotBlank() &&
+                        storePassword.isNotEmpty() && keyPassword.isNotEmpty(),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
+                    onClick = {
+                        saving = true
+                        status = null
+                        scope.launch {
+                            val result = runCatching {
+                                val file = File(keystorePath)
+                                require(file.isFile) { "签名文件不存在" }
+                                val credentials = withContext(Dispatchers.IO) {
+                                    KeystoreUtil.load(file, storePassword, alias, keyPassword)
+                                }
+                                val profile = SigningProfile(
+                                    keystorePath = file.absolutePath,
+                                    alias = alias.trim(),
+                                    storePassword = storePassword,
+                                    keyPassword = keyPassword,
+                                    certificateSha256 = KeystoreUtil.expectedSigHash(credentials),
+                                )
+                                onSave(profile).getOrThrow()
+                            }
+                            statusIsError = result.isFailure
+                            status = result.fold(
+                                onSuccess = { "签名验证通过并已安全保存，后续加固会自动使用此签名" },
+                                onFailure = { "保存失败：${friendlyMessage(it)}" },
+                            )
+                            saving = false
+                        }
+                    },
+                ) { Text(if (saving) "验证并保存中…" else "验证并保存") }
+
+                if (initialProfile != null) {
+                    OutlinedButton(
+                        enabled = !saving,
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = {
+                            val result = onClear()
+                            statusIsError = result.isFailure
+                            status = result.fold(
+                                onSuccess = {
+                                    keystorePath = ""
+                                    alias = ""
+                                    storePassword = ""
+                                    keyPassword = ""
+                                    "已清除签名配置"
+                                },
+                                onFailure = { "清除失败：${friendlyMessage(it)}" },
+                            )
+                        },
+                    ) { Text("清除配置") }
+                }
             }
         }
+        Spacer(Modifier.height(16.dp))
         SignatureToolbox(initialProfile)
     }
 }
@@ -185,7 +193,7 @@ private fun signingField(label: String, value: String, onChange: (String) -> Uni
         label = { Text(label) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = signingFieldColors(),
     )
 }
@@ -204,7 +212,7 @@ private fun passwordField(
         singleLine = true,
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = signingFieldColors(),
     )
 }

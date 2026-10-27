@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.compare
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -16,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.ApkComparison
 import com.apkharden.packager.core.ApkToolbox
 import com.apkharden.packager.core.formatBytes
+import com.apkharden.packager.ui.common.ToolPanel
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.inspect.*
 import com.apkharden.packager.ui.theme.LocalSemantic
@@ -39,7 +43,7 @@ fun CompareScreen() {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         PageTitle("APK 对比", "对照新旧版本的签名、版本、SDK、ABI 与包内文件变化")
-        ValueCard {
+        ToolPanel(Modifier.fillMaxWidth(), sem.formBg) {
             ApkPicker("旧版本 APK", oldPath) { oldPath = it; result = null; error = null }
             Spacer(Modifier.height(10.dp))
             ApkPicker("新版本 APK", newPath) { newPath = it; result = null; error = null }
@@ -127,8 +131,7 @@ private fun ApkPicker(label: String, value: String, onChange: (String) -> Unit) 
 @Composable
 private fun VerdictCard(label: String, value: String, good: Boolean, modifier: Modifier) {
     val sem = LocalSemantic.current
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(sem.cardBg)
-        .border(1.dp, sem.cardBorder, RoundedCornerShape(14.dp)).padding(16.dp)) {
+    Column(modifier.clip(RoundedCornerShape(24.dp)).background(sem.selectionBg).padding(22.dp)) {
         Text(label, style = MaterialTheme.typography.caption, color = sem.subtle)
         Spacer(Modifier.height(5.dp))
         Text(value, style = MaterialTheme.typography.subtitle1,
@@ -139,8 +142,7 @@ private fun VerdictCard(label: String, value: String, good: Boolean, modifier: M
 @Composable
 private fun DeltaCard(label: String, value: String, modifier: Modifier) {
     val sem = LocalSemantic.current
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(sem.cardBg)
-        .border(1.dp, sem.cardBorder, RoundedCornerShape(14.dp)).padding(16.dp)) {
+    Column(modifier.clip(RoundedCornerShape(24.dp)).background(sem.selectionBg).padding(22.dp)) {
         Text(label, style = MaterialTheme.typography.caption, color = sem.subtle)
         Spacer(Modifier.height(5.dp))
         Text(value, style = MaterialTheme.typography.subtitle1)

@@ -18,10 +18,11 @@ fun main() {
             title = "ApkHarden",
             // Open centered on the screen instead of the platform default (top-left / cascading).
             state = rememberWindowState(
-                width = 1180.dp, height = 760.dp,
+                width = 1180.dp, height = 820.dp,
                 position = WindowPosition(Alignment.Center),
             ),
         ) {
+            window.minimumSize = java.awt.Dimension(1000, 680)
             App()
         }
     }

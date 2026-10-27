@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.size
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.*
+import com.apkharden.packager.ui.common.ToolPanel
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.inspect.PageTitle
 import com.apkharden.packager.ui.inspect.SectionTitle
@@ -37,7 +41,7 @@ fun SizeAnalysisScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageTitle("包体积分析", "定位新版本体积增量来源，按模块和具体文件生成排行榜")
-        ValueCard {
+        ToolPanel(Modifier.fillMaxWidth(), sem.formBg) {
             SizePicker("旧版本 APK", oldPath) { oldPath = it; result = null }
             Spacer(Modifier.height(9.dp))
             SizePicker("新版本 APK", newPath) { newPath = it; result = null }
@@ -92,8 +96,7 @@ private fun SizePicker(label: String, value: String, onChange: (String) -> Unit)
 @Composable
 private fun MetricCard(label: String, value: String, modifier: Modifier, warning: Boolean = false) {
     val sem = LocalSemantic.current
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(sem.cardBg)
-        .border(1.dp, sem.cardBorder, RoundedCornerShape(12.dp)).padding(14.dp)) {
+    Column(modifier.clip(RoundedCornerShape(24.dp)).background(sem.selectionBg).padding(22.dp)) {
         Text(label, style = MaterialTheme.typography.caption, color = sem.subtle)
         Spacer(Modifier.height(5.dp))
         Text(value, style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.SemiBold,

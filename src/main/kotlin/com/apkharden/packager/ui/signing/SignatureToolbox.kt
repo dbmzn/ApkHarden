@@ -1,14 +1,10 @@
 package com.apkharden.packager.ui.signing
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -16,16 +12,20 @@ import com.apkharden.packager.core.ApkInspector
 import com.apkharden.packager.core.ApkSignatureInfo
 import com.apkharden.packager.core.KeystoreUtil
 import com.apkharden.packager.signing.SigningProfile
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolPanel
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.theme.LocalSemantic
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class CertificateSummary(
     val subject: String,
@@ -153,9 +153,7 @@ private fun SignatureApkPicker(label: String, value: String, onChange: (String) 
 
 @Composable
 private fun ToolboxCard(content: @Composable ColumnScope.() -> Unit) {
-    val sem = LocalSemantic.current
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(sem.cardBg)
-        .border(1.dp, sem.cardBorder, RoundedCornerShape(12.dp)).padding(14.dp), content = content)
+    ToolPanel(Modifier.fillMaxWidth(), content = content)
 }
 
 @Composable

@@ -14,12 +14,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.*
+import com.apkharden.packager.ui.common.ImportWorkspace
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolPanel
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.theme.LocalSemantic
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 @Composable
 fun InspectScreen() {
@@ -35,7 +40,13 @@ fun InspectScreen() {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         PageTitle("APK 体检", "发布前快速检查签名、版本、ABI、DEX 与关键构建开关")
-        ToolInputCard {
+        ImportWorkspace(
+            empty = report == null, title = "读懂 APK，\n安心发布",
+            description = "从签名到构建配置，集中检查发布风险。",
+            features = listOf("签名与版本" to "证书、签名方案与 SDK 兼容性",
+                "代码与架构" to "DEX、原生库与 ABI 完整性",
+                "发布风险" to "逐项展示阻塞、提醒和检查建议"),
+        ) {
             OutlinedTextField(
                 value = path,
                 onValueChange = { path = it; report = null; error = null },
@@ -118,8 +129,8 @@ private fun FindingRow(finding: ApkFinding) {
         FindingLevel.INFO -> MaterialTheme.colors.secondary
     }
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(sem.cardBg)
-            .border(1.dp, sem.cardBorder, RoundedCornerShape(12.dp)).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(sem.cardBg)
+            .border(1.dp, sem.cardBorder, RoundedCornerShape(20.dp)).padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.padding(top = 4.dp).size(9.dp).clip(RoundedCornerShape(5.dp)).background(color))
@@ -139,40 +150,22 @@ private fun FindingLevel.label() = when (this) {
 }
 
 @Composable
-internal fun PageTitle(title: String, subtitle: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.h5, fontWeight = FontWeight.Bold)
-        Text(subtitle, style = MaterialTheme.typography.body2, color = LocalSemantic.current.subtle)
+internal fun PageTitle(title: String, subtitle: String, modifier: Modifier = Modifier) {
+    Column(modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = MaterialTheme.typography.h5)
+        Text(subtitle, style = MaterialTheme.typography.body1, color = LocalSemantic.current.subtle)
     }
 }
 
 @Composable
-internal fun ToolInputCard(content: @Composable RowScope.() -> Unit) {
-    val sem = LocalSemantic.current
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(sem.cardBg)
-            .border(1.dp, sem.cardBorder, RoundedCornerShape(16.dp)).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        content = content,
-    )
-}
-
-@Composable
 internal fun ValueCard(content: @Composable ColumnScope.() -> Unit) {
-    val sem = LocalSemantic.current
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(sem.cardBg)
-            .border(1.dp, sem.cardBorder, RoundedCornerShape(14.dp)).padding(16.dp),
-        content = content,
-    )
+    ToolPanel(Modifier.fillMaxWidth(), content = content)
 }
 
 @Composable
 private fun SummaryCard(label: String, value: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier) {
     val sem = LocalSemantic.current
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(sem.cardBg)
-        .border(1.dp, sem.cardBorder, RoundedCornerShape(14.dp)).padding(16.dp)) {
+    Column(modifier.clip(RoundedCornerShape(24.dp)).background(sem.selectionBg).padding(22.dp)) {
         Text(label, style = MaterialTheme.typography.caption, color = sem.subtle)
         Spacer(Modifier.height(6.dp))
         Text(value, style = MaterialTheme.typography.h6, color = color)

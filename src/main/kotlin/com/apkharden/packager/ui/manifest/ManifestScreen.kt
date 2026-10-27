@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.manifest
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.apkharden.packager.core.*
+import com.apkharden.packager.ui.common.ImportWorkspace
 import com.apkharden.packager.ui.common.pickFile
 import com.apkharden.packager.ui.inspect.PageTitle
 import com.apkharden.packager.ui.inspect.SectionTitle
@@ -37,8 +41,13 @@ fun ManifestScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PageTitle("Manifest 查看器", "图形化查看权限、四大组件、进程、Deep Link、Provider 与启动 Activity")
-        ValueCard {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ImportWorkspace(
+            empty = report == null, title = "读懂应用的\n权限与组件",
+            description = "不必反编译，直接查看 Manifest 声明。",
+            features = listOf("权限声明" to "查看应用请求的全部权限",
+                "组件与进程" to "四大组件、导出状态与风险提示",
+                "应用入口" to "启动 Activity、Provider 与 Deep Link"),
+        ) {
                 OutlinedTextField(apkPath, { apkPath = it; report = null }, label = { Text("APK 文件") },
                     modifier = Modifier.weight(1f), singleLine = true)
                 OutlinedButton(onClick = { pickFile("APK 文件", extensions = listOf("apk"))?.let { apkPath = it; report = null } }) { Text("浏览") }
@@ -50,7 +59,6 @@ fun ManifestScreen() {
                         running = false
                     }
                 }) { Text(if (running) "解析中…" else "解析 Manifest") }
-            }
         }
         error?.let { Text("解析失败：$it", color = MaterialTheme.colors.error) }
         report?.let { value ->
@@ -73,8 +81,14 @@ fun ManifestScreen() {
             SectionTitle("权限", "${permissions.size} 项")
             ValueCard {
                 if (permissions.isEmpty()) Text("没有匹配的权限", color = sem.subtle)
-                permissions.forEach { permission ->
-                    Text(permission, style = MaterialTheme.typography.body2, modifier = Modifier.padding(vertical = 4.dp))
+                permissions.chunked(2).forEach { pair ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        pair.forEach { permission ->
+                            Text(permission, style = MaterialTheme.typography.body2,
+                                modifier = Modifier.weight(1f).padding(vertical = 12.dp))
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
             SectionTitle("组件", "${components.size} 项 · ${components.count { it.risk != ManifestRisk.NORMAL }} 项需关注")
@@ -96,9 +110,9 @@ private fun ComponentCard(component: ManifestComponent) {
         ManifestRisk.REVIEW -> sem.sevMedium
         ManifestRisk.NORMAL -> sem.advice
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(sem.cardBg)
-        .border(1.dp, if (component.risk == ManifestRisk.NORMAL) sem.cardBorder else riskColor.copy(alpha = .6f), RoundedCornerShape(12.dp))
-        .padding(14.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(sem.cardBg)
+        .border(1.dp, if (component.risk == ManifestRisk.NORMAL) sem.cardBorder else riskColor.copy(alpha = .6f), RoundedCornerShape(22.dp))
+        .padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(component.type, color = MaterialTheme.colors.primary, style = MaterialTheme.typography.caption,
                 modifier = Modifier.width(92.dp))

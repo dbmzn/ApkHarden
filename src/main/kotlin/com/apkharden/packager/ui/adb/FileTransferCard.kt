@@ -1,5 +1,8 @@
 package com.apkharden.packager.ui.adb
 
+import com.apkharden.packager.ui.common.ToolButton as Button
+import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
+import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -89,8 +92,8 @@ internal fun FileTransferCard(device: AndroidDevice?, history: SnapshotStateList
                 }
             },
         )
-        Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(sem.cardBg)
-            .border(1.dp, sem.cardBorder, RoundedCornerShape(16.dp))) {
+        Column(modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(sem.cardBg)
+            .border(1.dp, sem.cardBorder, RoundedCornerShape(28.dp))) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 FileBadge("↔", true)
                 Spacer(Modifier.width(12.dp))
@@ -163,9 +166,9 @@ private fun TransferBubble(message: TransferMessage, onOpen: (File) -> Unit) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = if (message.outgoing) Alignment.End else Alignment.Start) {
         Text("${if (message.outgoing) "电脑 → 手机" else "手机 → 电脑"}  ·  ${message.time}", color = sem.subtle,
             style = MaterialTheme.typography.caption, modifier = Modifier.padding(bottom = 6.dp))
-        Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(.78f).clip(RoundedCornerShape(12.dp))
+        Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(.78f).clip(RoundedCornerShape(20.dp))
             .background(if (message.outgoing) MaterialTheme.colors.primary.copy(alpha = .10f) else sem.cardBg)
-            .border(1.dp, if (message.outgoing) MaterialTheme.colors.primary.copy(alpha = .22f) else sem.cardBorder, RoundedCornerShape(12.dp))
+            .border(1.dp, if (message.outgoing) MaterialTheme.colors.primary.copy(alpha = .22f) else sem.cardBorder, RoundedCornerShape(20.dp))
             .padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FileBadge(message.name.substringAfterLast('.', "FILE"))
