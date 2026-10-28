@@ -2,13 +2,14 @@
 
 **把设备调试、日常开发和 APK 处理，放进一个桌面工具箱。**
 
-面向 Android 开发者的 Compose Desktop 应用。连接手机即可截图、录屏、镜像和互传文件；选择本地 APK，即可检查发布风险、浏览 Manifest、比较版本、分析包体，并完成 DEX 加固与正式签名。
+面向 Android、Web 和后端开发者的本地桌面工具箱。连接手机即可截图、录屏、镜像和互传文件；无需连接设备，也能处理 JSON、比较文本、转换编码、计算时间，以及压缩、转换、缩放和裁剪图片。Android 发布环节还提供 APK 分析、版本对比、加固与签名管理。
 
-[快速上手](#快速上手) · [界面预览](#界面预览) · [皮肤与外观](#皮肤与外观) · [编译与运行](#编译与运行) · [常见问题](docs/FAQ.md) · [加固说明](docs/hardening.md)
+[快速上手](#快速上手) · [通用开发工具](#通用开发工具) · [图片工具](#图片工具) · [界面预览](#界面预览) · [编译与运行](#编译与运行) · [常见问题](docs/FAQ.md) · [加固说明](docs/hardening.md)
 
 - **截图、录屏与实时镜像**：USB / Wi-Fi 连接，截图预览与标注、短视频录制，以及独立镜像窗口中的查看和操控。
 - **日常调试**：手机剪贴板、双向文件互传、日志过滤与故障诊断。
-- **通用开发**：JSON 格式化与查询、文本 / JSON 对比、编码解码、时间戳与 Cron 预览，以及 PNG / JPEG / WebP 压缩、转换、缩放与裁剪，均在本机处理。
+- **通用开发**：JSON 格式化与查询、文本 / JSON 对比、编码解码、时间戳与 Cron 预览，均在本机处理。
+- **图片处理**：PNG / JPEG / WebP 批量压缩与互转，等比或指定尺寸缩放，可视化裁剪，前后对比后安全另存。
 - **发布检查**：APK 体检、Manifest 查看、文件浏览、版本对比和包体增量分析。
 - **加固与签名**：业务 DEX 加密、壳注入、16 KB ZIP 对齐、V1 + V2 + V3 签名和 JSON 报告。
 - **可切换外观**：默认「经典绿青」，另有 3 套明亮皮肤；支持浅色、深色、跟随系统及自动记忆。
@@ -43,9 +44,30 @@
 | 时间工具 | 秒 / 毫秒时间戳转换、IANA 时区转换、时间差计算、Unix 5 位与 Spring 6 位 Cron 的未来执行时间 |
 | 图片工具 | PNG / JPEG / WebP 压缩与互转、等比 / 指定宽高 / 百分比缩放、拖框与像素裁剪、透明背景合成、批量预览另存 |
 
-支持显式粘贴、打开 UTF-8 文本文件，以及复制 / 保存处理结果。切换工具或离开通用工具页后，输入和结果仍保留到应用关闭；不会自动读取剪贴板或持久保存输入历史。JWT 仅解析、不验签；Cron 仅预览、不执行任务。具体用法与输入限制见[通用工具说明](docs/developer-tools.md)。
+文本类工具支持显式粘贴、打开 UTF-8 文件，以及复制 / 保存处理结果。切换工具或离开通用工具页后，输入和结果仍保留到应用关闭；不会自动读取剪贴板或持久保存输入历史。JWT 仅解析、不验签；Cron 仅预览、不执行任务。具体用法与输入限制见[通用工具说明](docs/developer-tools.md)。
 
-纯压缩保留尺寸和格式；实际转换、缩放、裁剪会保留用户要求的编辑结果。所有操作均不覆盖原图。macOS 分发包已内置引擎，Windows / Linux 需额外配置。使用方法、平台范围及实测数据见[图片工具说明](docs/image-tools.md)。
+### 图片工具
+
+入口：**通用工具 → 图片工具**。支持静态 PNG、JPEG、WebP，全程在本机处理，无需账号或 API Key。
+
+| 功能 | 使用方式 |
+| --- | --- |
+| 智能压缩 | 体积优先、均衡、画质优先三档；允许像素变化，适合减小图片体积 |
+| 无损优化 | 优化现有图像编码；仅压缩时保留尺寸、格式和原元数据 |
+| 格式互转 | PNG、JPEG、WebP 三种格式互转；PNG / WebP 保留透明度，JPEG 可选白底、黑底或自定义背景 |
+| 调整尺寸 | 等比适配、指定宽高拉伸、百分比缩放；等比模式默认不放大，可显式开启 |
+| 可视化裁剪 | 拖框选择、框内移动、角点调节，或精确填写 X、Y、宽度、高度；按校正方向后的画面操作 |
+| 批量与预览 | 格式和尺寸对整批生效，裁剪逐张设置；查看实际输出尺寸、格式、体积增减，支持同步放大对比 |
+
+**添加图片 → 转换 / 尺寸 / 裁剪 → 应用设置 → 开始处理 → 批量另存到文件夹。** 只需压缩时，可直接选择压缩模式并开始。
+
+- 原图不覆盖，导出重名自动编号；每次从导入时的快照处理，不累积上次编码的损失。
+- 纯压缩结果更大时保留原始文件；实际转换、缩放或裁剪后，即使文件变大，也保留所选编辑结果。
+- 切换工具会保留队列和未应用的编辑草稿。设置改变后，旧结果需重新处理才可导出；取消任务保留已完成结果。
+- 实际编辑统一输出为 8 位 sRGB，并移除旧 EXIF 等元数据；JPEG 编辑后需要有损重编码。
+- 单张输入最多 32 MB / 2400 万像素，每批最多 100 张 / 256 MB；暂不支持动画、GIF、AVIF 和 CMYK JPEG。
+
+macOS 分发包已内置图片引擎，Apple Silicon 已验证；Windows / Linux 需额外配置，尚未完成图片功能验证。完整限制、构建方式及压缩样本数据见[图片工具说明](docs/image-tools.md)。
 
 ### APK 与签名工具
 
@@ -63,13 +85,16 @@ APK 静态分析、签名与加固使用本机 JVM 库，不需要连接手机�
 
 ## 快速上手
 
-1. **启动应用**：从源码运行 `./gradlew run`，或打开本机打包生成的应用。完整环境与命令见[编译与运行](#编译与运行)。
+以下功能可按需使用，通用开发和图片工具无需先连接手机。
+
+1. **启动应用**：打开本机打包生成的应用，或按[编译与运行](#编译与运行)准备环境后从源码启动。
 2. **连接设备**：开启手机 USB 调试、连接数据线并允许授权，点击「刷新设备」；也可以使用右上角「无线连接」。选择在线设备后开始截图、录屏或调试。
 3. **检查 APK**：进入「APK 体检」，点击「浏览」选择文件，再点击「开始体检」。需要查看具体内容时，进入 Manifest 或文件浏览；对比工具需分别选择旧包、新包。
 4. **生成码图**：进入「二维码与条形码」，选择格式、填写内容、生成预览，随后复制图片或保存 PNG。二维码支持可选中心图片、替换 / 移除及三档占比。
 5. **加固签名**：先在「签名百宝箱」填写 keystore、别名和密码，点击「验证并保存」；再进入「APK 加固」，选择输入与输出文件，点击「开始加固并签名」。
-6. **处理日常开发数据**：打开「通用工具」，选择 JSON、文本对比、编码解码、时间工具或图片工具；图片可多选后批量压缩、转换、缩放，逐张裁剪后预览另存。
-7. **切换外观**：点击左下角「换肤」，选中皮肤和外观模式即可生效；「恢复默认」回到经典绿青与浅色模式。
+6. **处理日常开发数据**：按 ⌘K / Ctrl+K 搜索 JSON、文本对比、编码解码或时间工具；可先使用内置示例查看效果。
+7. **处理图片**：打开「通用工具 → 图片工具」，多选图片；需要编辑时进入「转换 / 尺寸 / 裁剪」，应用设置后处理，检查预览并批量另存。
+8. **切换外观**：点击左下角「换肤」，选中皮肤和外观模式即可生效；「恢复默认」回到经典绿青与浅色模式。
 
 侧栏使用图标导航：当前工具显示名称，悬停可查看其他工具的名称与用途。文件输入框支持浏览选择或手动填写路径。
 
@@ -84,7 +109,7 @@ app-hardened-report.json
 
 ## 界面预览
 
-以下截图来自当前桌面应用，默认展示「经典绿青」。APK 结果使用独立测试包，签名配置截图为空配置状态；这些图片用于展示界面，不代表对所有业务 APK 或设备的兼容性承诺。点击图片可查看原图。
+以下展示实际桌面界面及 Compose 自动化渲染的图片工具页面，默认使用「经典绿青」。APK 结果使用独立测试包，签名配置为空；图片工具使用透明测试图形。截图来源见[说明](docs/screenshots/README.md)，点击图片可查看原图。
 
 ### 截图与录屏
 
@@ -97,6 +122,14 @@ app-hardened-report.json
 在独立窗口中查看和操控设备，按屏幕比例适配桌面可用区域。下图展示镜像已运行时的工具页面、启停控制与快捷操作说明，**不包含独立镜像窗口中的设备画面**。
 
 ![实时镜像工具页：连接状态、停止镜像按钮和操作说明，不含设备画面](docs/screenshots/live-mirror.jpg)
+
+### 图片转换、尺寸与裁剪
+
+下图由实际 Compose 页面组件自动渲染，展示透明 PNG 的裁剪、等比缩放和 WebP 输出。格式与尺寸统一设置，裁剪框按图片分别保存。
+
+| 格式、尺寸与裁剪设置 | 处理结果与前后对比 |
+| :---: | :---: |
+| ![图片转换、尺寸与裁剪设置](docs/screenshots/image-edit-settings.png) | ![裁剪缩放后转为 WebP 的结果](docs/screenshots/image-edit-result.png) |
 
 <details>
 <summary>APK 导入与深浅主题</summary>
@@ -159,8 +192,6 @@ app-hardened-report.json
 | 本地图片压缩 · 浅色 | 本地图片压缩 · 深色 |
 | :---: | :---: |
 | ![图片压缩队列和前后对比](docs/screenshots/image-compression-light.png) | ![深色外观下的图片压缩](docs/screenshots/image-compression-dark.png) |
-
-![图片转换、尺寸与裁剪设置](docs/screenshots/image-edit-settings.png)
 
 </details>
 
@@ -247,15 +278,16 @@ USB 使用前确认 `adb devices -l` 能列出目标设备且状态为 `device`�
 | Kotlin / Compose | 当前为 **Kotlin 2.1.0 / Compose 1.7.3**，由 Gradle 解析依赖 |
 | Android SDK / NDK | 普通桌面构建无需；设备工具需要 ADB；重建壳或生成真机测试包另有要求 |
 | scrcpy | macOS / Windows 打包自动准备 **3.3.4**，下载后校验 SHA-256；首次需要可访问 GitHub |
+| 图片引擎（macOS） | 需要 Xcode 命令行工具、Python 3；构建脚本校验并准备 pngquant、OxiPNG、MozJPEG、libwebp。找不到 CMake 时在项目 `build/` 内安装固定版本，首次需要 Python 的 pip 可用 |
 | 网络 | 首次构建需要访问 Gradle、Google Maven、Maven Central 等依赖源 |
 
 版本与平台配置以 [build.gradle.kts](build.gradle.kts) 和 [Gradle Wrapper](gradle/wrapper/gradle-wrapper.properties) 为准。
 
 | 平台 | 当前情况 |
 | --- | --- |
-| macOS | 按 Apple Silicon / Intel 选择原生依赖和 scrcpy；使用系统文件对话框，支持钥匙串保护签名配置；现有实机记录见[验证报告](docs/macos-verification-2026-09-05.md) |
-| Windows | 支持原生文件对话框、DPAPI 保护签名配置；随包准备 Windows x64 scrcpy；MSI 打包另需 WiX Toolset 3.x |
-| Linux | 配置了 DEB 目标，但未完整验证；scrcpy 需自行安装，签名密码的安全保存暂不支持；DEB 构建需 `dpkg` / `fakeroot` |
+| macOS | 按 Apple Silicon / Intel 选择原生依赖和 scrcpy，随包准备图片引擎；使用系统文件对话框和钥匙串。图片功能已在 Apple Silicon 验证；设备功能历史记录见[验证报告](docs/macos-verification-2026-09-05.md) |
+| Windows | 支持文件对话框、DPAPI 保护签名配置，随包准备 Windows x64 scrcpy；图片引擎需额外配置，MSI 打包另需 WiX Toolset 3.x |
+| Linux | 配置了 DEB 目标，但未完整验证；scrcpy 与图片引擎需自行准备，签名密码的安全保存暂不支持；DEB 构建需 `dpkg` / `fakeroot` |
 
 ### 获取源码并启动
 
@@ -280,11 +312,14 @@ java -version
 .\gradlew.bat run
 ```
 
-IDE 中使用 Gradle 导入项目，并配置可用的 JDK 17 toolchain。首次运行会下载构建依赖；macOS / Windows 的 `run` 与打包任务会自动准备 scrcpy 资源。也可以单独提前准备：
+IDE 中使用 Gradle 导入项目，并配置可用的 JDK 17 toolchain。首次运行会下载构建依赖；macOS / Windows 的 `run` 与打包任务会自动准备 scrcpy 资源。macOS 的运行、测试和打包还会准备图片引擎，请先满足上面的 Xcode 命令行工具与 Python 要求。也可以单独提前准备：
 
 ```sh
 ./gradlew prepareScrcpyResources
+./gradlew prepareImageTools     # macOS：下载校验并构建图片引擎
 ```
+
+Windows / Linux 使用图片功能前，需将 `APK_HARDEN_IMAGE_TOOLS` 设置为本机图片引擎目录，并准备对应运行依赖；配置方法见[图片引擎说明](docs/image-tools.md#构建与引擎)。打包后的 macOS 应用已包含这些引擎，最终使用者无需另装 Python、CMake 或 Xcode。
 
 需要覆盖默认 scrcpy 查找结果时，macOS 开发运行可显式指定：
 
@@ -347,7 +382,16 @@ CLI 也接受 `--keystore`、`--storePass`、`--alias`、`--keyPass` 显式参�
 
 ## 测试与兼容性
 
-常规测试覆盖 APK 解析、重打包、加固与签名、码图生成识别、设备命令构造、文件传输规则、剪贴板编码，以及皮肤配置读写与文字对比度。
+常规测试覆盖 APK 解析、重打包、加固与签名、码图生成识别、设备命令构造、文件传输规则、剪贴板编码，以及皮肤配置读写与文字对比度；也覆盖 JSON 精度与查询、文本比较、编码往返、时区与 Cron 边界。
+
+图片测试包含 PNG / JPEG / WebP 六个转换方向、无损像素一致性、透明度、JPEG 背景色、ICC 色彩处理、方向校正后裁剪、缩放边界、取消与安全导出。Compose 桌面自动化验证裁剪框选择 / 移动 / 角点调整、精确输入、批量处理、编辑草稿恢复及旧结果导出拦截；系统文件选择器的人工操作不属于该自动化覆盖。具体证据与样本数据见[图片验证记录](docs/image-tools.md#验证记录2026-10-28)。
+
+只验证通用工具或图片工具时可运行：
+
+```sh
+./gradlew test --tests 'com.apkharden.packager.core.developer.*'
+./gradlew test --tests 'com.apkharden.packager.core.image.*'
+```
 
 **普通 `./gradlew test` 不等于真机验收。** 连接设备、真实录屏、无线连接、文件互传和 macOS 钥匙串等检查通过环境变量显式开启。启用条件与测试副作用见[开发验证说明](docs/development.md)。
 
@@ -381,15 +425,20 @@ CLI 也接受 `--keystore`、`--storePass`、`--alias`、`--keyPass` 显式参�
 flowchart LR
     UI[Compose Desktop 工具页面] --> APK[APK 分析与加固]
     UI --> ADB[设备服务]
+    UI --> DATA[JSON / 文本 / 编码 / 时间]
+    UI --> IMAGE[图片压缩 / 转换 / 缩放 / 裁剪]
     UI --> SETTINGS[外观与签名配置]
     CLI[命令行入口] --> APK
     APK --> LIB[ARSCLib / apksig]
     APK --> SHELL[预编译壳 DEX / Native 库]
     ADB --> DEVICE[ADB / scrcpy / Android 设备]
+    IMAGE --> ENGINES[pngquant / OxiPNG / MozJPEG / libwebp]
     SETTINGS --> PREFS[Preferences / 系统密钥保护]
 ```
 
 主要依赖：Compose Desktop、Kotlin Coroutines、Kotlinx Serialization、apksig、ARSCLib、ZXing、JCodec、JNA、LWJGL NFD、JsonPath、cron-utils 和 java-diff-utils。具体版本见 [Gradle 依赖配置](build.gradle.kts)。
+
+图片处理使用独立本地引擎 pngquant、OxiPNG、MozJPEG 和 libwebp；源码版本与下载校验值见 [prepare-image-tools.py](scripts/prepare-image-tools.py)。
 
 修改 `guard/`、`shell/` 或 `native/` 后需要重建壳资源，再测试桌面加固与设备启动，不能仅编译桌面源码。现有脚本依赖 Windows Android 构建工具，详见[开发验证说明](docs/development.md#重建壳资源)。
 
@@ -403,4 +452,4 @@ flowchart LR
 
 界面布局与初始绿青配色参考 [AndroidToolKit](https://github.com/LazyIonEs/AndroidToolKit)。ApkHarden 保留自身的设备工具、APK 分析和加固流程，并提供独立皮肤库。
 
-本项目使用 [Apache License 2.0](LICENSE)。第三方库及随包工具遵循各自许可证；scrcpy 的上游项目为 [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)。
+本项目使用 [Apache License 2.0](LICENSE)。第三方库及随包工具遵循各自许可证；scrcpy 的上游项目为 [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)。macOS 图片工具目录保留各引擎的许可证、版权说明及对应源码归档，详见[图片引擎许可说明](docs/image-tools.md#构建与引擎)。
