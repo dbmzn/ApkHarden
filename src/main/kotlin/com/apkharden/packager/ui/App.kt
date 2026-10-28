@@ -60,7 +60,7 @@ private enum class Destination(
     CLIPBOARD("手机剪贴板", "查看与复制手机文字", ToolIcons.Clipboard, adbTab = AdbTab.CLIPBOARD),
     FILES("文件互传", "电脑与手机双向传输", ToolIcons.Transfer, adbTab = AdbTab.FILES),
     BARCODE("二维码与条形码", "生成码图与识别内容", ToolIcons.Code),
-    DEVELOPER("通用工具", "JSON、文本、编码与时间", ToolIcons.Toolkit),
+    DEVELOPER("通用工具", "JSON、文本、编码、时间与图片", ToolIcons.Toolkit),
     ADB("更多调试", "日志、性能与应用操作", ToolIcons.Debug),
     DEVICE("设备验证", "安装与冷启动门禁", ToolIcons.Device),
     HARDEN("APK 加固", "DEX 保护与加固签名", ToolIcons.Shield),
@@ -95,6 +95,7 @@ fun App(openDeveloperToolsSignal: Int = 0) {
     DisposableEffect(appearanceWrites) { onDispose { appearanceWrites.close() } }
     var selected by remember { mutableStateOf(Destination.CAPTURE) }
     val developerTools = remember { DeveloperToolsState() }
+    DisposableEffect(developerTools) { onDispose { developerTools.image.close() } }
     LaunchedEffect(openDeveloperToolsSignal) {
         if (openDeveloperToolsSignal > 0) {
             selected = Destination.DEVELOPER

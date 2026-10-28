@@ -84,6 +84,12 @@ val prepareScrcpyResources by tasks.registering(Sync::class) {
     }
     into(scrcpyAppResourcesRoot.map { it.dir("${if (isMac) "macos" else "windows"}/scrcpy") })
 }
+val prepareImageTools by tasks.registering(Exec::class) {
+    group = "apkharden"
+    description = "Build and bundle local PNG/JPEG compression engines on macOS."
+    onlyIf { isMac }
+    commandLine("python3", "scripts/prepare-image-tools.py")
+}
 repositories {
     google()
     mavenCentral()
@@ -107,6 +113,7 @@ dependencies {
     implementation("io.github.reandroid:ARSCLib:1.3.8")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
     implementation("org.jcodec:jcodec-javase:0.2.5")
     implementation("com.google.zxing:core:3.5.4")
     implementation("com.jayway.jsonpath:json-path:3.0.0")
@@ -119,10 +126,12 @@ dependencies {
     runtimeOnly("org.lwjgl:lwjgl:$lwjglVersion:$lwjglNatives")
     runtimeOnly("org.lwjgl:lwjgl-nfd:$lwjglVersion:$lwjglNatives")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation(compose.desktop.uiTestJUnit4)
 }
 
 tasks.test {
     useJUnitPlatform()
+    if (isMac) dependsOn(prepareImageTools)
     if (isMac) jvmArgs("--add-exports=java.desktop/sun.awt.datatransfer=ALL-UNNAMED")
     // Opt-in integration checks must not be reused from an ordinary unit-test run.
     inputs.property("deviceVerification", System.getenv("APK_HARDEN_DEVICE_TEST").orEmpty())
@@ -176,7 +185,7 @@ compose.desktop {
 
 tasks.configureEach {
     if (name == "prepareAppResources") {
-        dependsOn(prepareScrcpyResources)
+        dependsOn(prepareScrcpyResources, prepareImageTools)
     }
 }
 
@@ -189,6 +198,10 @@ tasks.configureEach {
                 val resources = layout.buildDirectory.dir("compose/binaries/main/app/ApkHarden.app/Contents/app/resources/scrcpy").get().asFile
                 listOf("scrcpy", "adb").forEach { name ->
                     check(File(resources, name).setExecutable(true, false)) { "Cannot mark $name executable" }
+                }
+                val imageTools = File(resources.parentFile, "image-tools")
+                listOf("pngquant", "oxipng", "cjpeg", "djpeg", "jpegtran").forEach { name ->
+                    check(File(imageTools, name).setExecutable(true, false)) { "Cannot mark $name executable" }
                 }
             }
         }

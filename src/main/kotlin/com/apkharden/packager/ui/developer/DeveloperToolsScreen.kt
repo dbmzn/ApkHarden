@@ -22,7 +22,7 @@ internal fun DeveloperToolsScreen(state: DeveloperToolsState) {
         if (state.focusSearchSignal > 0) focus.requestFocus()
     }
     Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        PageTitle("通用开发工具", "JSON、文本、编码与时间，在本机处理，工作内容保留至关闭应用")
+        PageTitle("通用开发工具", "JSON、文本、编码、时间与图片，在本机处理，工作内容保留至关闭应用")
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ToolTextField(state.search, { state.search = it }, Modifier.width(250.dp).focusRequester(focus),
                 label = { Text("搜索工具 · ⌘ / Ctrl K") }, singleLine = true)
@@ -47,6 +47,7 @@ internal fun DeveloperToolsScreen(state: DeveloperToolsState) {
                 DeveloperTool.DIFF -> DiffWorkspace(state.diff)
                 DeveloperTool.CODEC -> CodecWorkspace(state.codec)
                 DeveloperTool.TIME -> TimeWorkspace(state.time)
+                DeveloperTool.IMAGE -> com.apkharden.packager.ui.image.ImageWorkspace(state.image)
             }
         }
     }

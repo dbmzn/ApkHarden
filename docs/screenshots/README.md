@@ -2,6 +2,8 @@
 
 这些图片于 2026-10-27 从本次 UI 重构及换肤功能完成后的 macOS 桌面应用中采集，格式为原始 JPEG 截图。通用开发工具的 4 张截图于 2026-10-28 补充。
 
+`image-compression-light.png` 和 `image-compression-dark.png` 于 2026-10-28 由 Compose 桌面 UI 测试渲染实际图片工具组件，采用透明测试图形；不含系统标题栏和侧栏。用于核对布局、主题及实际压缩结果，不代表系统文件选择器的人工验收。
+
 - 浅色、深色页面均使用默认「经典绿青」；皮肤库截图展示全部 4 套可选皮肤。
 - `capture-recording.jpg` 与 `live-mirror.jpg` 展示正式应用连接设备时的主打工具页面。镜像截图在成功启动后采集，仅包含工具页面，不包含独立镜像窗口中的设备画面；采集结束后已停止镜像。
 - APK 分析使用仓库既有的独立运行时测试包 `com.apkharden.fixture` 及其加固副本，临时展示路径为 `/tmp/apkharden-readme-demo/`。
