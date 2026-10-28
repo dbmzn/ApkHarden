@@ -14,6 +14,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.runtime.*
+import com.apkharden.packager.ui.developer.DeveloperToolsScreen
+import com.apkharden.packager.ui.developer.DeveloperToolsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +60,7 @@ private enum class Destination(
     CLIPBOARD("手机剪贴板", "查看与复制手机文字", ToolIcons.Clipboard, adbTab = AdbTab.CLIPBOARD),
     FILES("文件互传", "电脑与手机双向传输", ToolIcons.Transfer, adbTab = AdbTab.FILES),
     BARCODE("二维码与条形码", "生成码图与识别内容", ToolIcons.Code),
+    DEVELOPER("通用工具", "JSON、文本、编码与时间", ToolIcons.Toolkit),
     ADB("更多调试", "日志、性能与应用操作", ToolIcons.Debug),
     DEVICE("设备验证", "安装与冷启动门禁", ToolIcons.Device),
     HARDEN("APK 加固", "DEX 保护与加固签名", ToolIcons.Shield),
@@ -70,7 +73,7 @@ private enum class Destination(
 }
 
 @Composable
-fun App() {
+fun App(openDeveloperToolsSignal: Int = 0) {
     val appearanceStore = remember { AppearanceStore() }
     var appearance by remember { mutableStateOf(appearanceStore.load()) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -91,6 +94,13 @@ fun App() {
     }
     DisposableEffect(appearanceWrites) { onDispose { appearanceWrites.close() } }
     var selected by remember { mutableStateOf(Destination.CAPTURE) }
+    val developerTools = remember { DeveloperToolsState() }
+    LaunchedEffect(openDeveloperToolsSignal) {
+        if (openDeveloperToolsSignal > 0) {
+            selected = Destination.DEVELOPER
+            developerTools.focusSearchSignal++
+        }
+    }
     val signingStore = remember { SigningProfileStore() }
     var signingProfile by remember { mutableStateOf(runCatching { signingStore.load() }.getOrNull()) }
 
@@ -125,6 +135,7 @@ fun App() {
                             Destination.SIZE -> SizeAnalysisScreen()
                             Destination.DEVICE -> DeviceScreen()
                             Destination.BARCODE -> BarcodeScreen()
+                            Destination.DEVELOPER -> DeveloperToolsScreen(developerTools)
                             Destination.ADB, Destination.CAPTURE, Destination.MIRROR,
                             Destination.CLIPBOARD, Destination.FILES -> Unit
                             Destination.SIGNING -> SigningScreen(
@@ -149,7 +160,7 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit, onAp
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxHeight().width(104.dp).padding(top = 12.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        TooltipArea(tooltip = { NavTooltip("ApkHarden · Android 开发工具箱") }) {
+        TooltipArea(tooltip = { NavTooltip("ApkHarden · 设备与开发工具箱") }) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(13.dp)).background(sem.accentBg),
                 contentAlignment = Alignment.Center) {
                 Icon(ToolIcons.Shield, "ApkHarden", Modifier.size(23.dp), tint = sem.onAccent)

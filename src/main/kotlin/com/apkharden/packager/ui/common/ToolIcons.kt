@@ -28,6 +28,7 @@ object ToolIcons {
     val Folder = icon("Folder", "M3 5H9L12 8H21V20H3Z")
     val Chart = icon("Chart", "M3 3H21V21H3Z M7 16V12 M12 16V7 M17 16V10")
     val Key = icon("Key", "M9 6A6 6 0 1 0 9 18A6 6 0 0 0 14.5 14H18V18H21V14H23V10H14.5A6 6 0 0 0 9 6 M7 10A2 2 0 1 1 7 14A2 2 0 1 1 7 10")
+    val Toolkit = icon("Toolkit", "M3 7H21V21H3Z M8 7V3H16V7 M3 12H21 M10 10H14V14H10Z")
     val Theme = icon("Theme", "M12 3A9 9 0 1 1 12 21A9 9 0 1 1 12 3 M12 3V21 M15 5V19 M18 8V16")
     val Video = icon("Video", "M3 5H16V19H3Z M16 10L22 6V18L16 14")
 }

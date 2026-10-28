@@ -1,6 +1,6 @@
 # ApkHarden
 
-**把设备调试、APK 分析与加固签名，放进一个桌面工具箱。**
+**把设备调试、日常开发和 APK 处理，放进一个桌面工具箱。**
 
 面向 Android 开发者的 Compose Desktop 应用。连接手机即可截图、录屏、镜像和互传文件；选择本地 APK，即可检查发布风险、浏览 Manifest、比较版本、分析包体，并完成 DEX 加固与正式签名。
 
@@ -8,6 +8,7 @@
 
 - **截图、录屏与实时镜像**：USB / Wi-Fi 连接，截图预览与标注、短视频录制，以及独立镜像窗口中的查看和操控。
 - **日常调试**：手机剪贴板、双向文件互传、日志过滤与故障诊断。
+- **通用开发**：JSON 格式化与查询、文本 / JSON 对比、编码解码、时间戳与 Cron 预览，均在本机处理。
 - **发布检查**：APK 体检、Manifest 查看、文件浏览、版本对比和包体增量分析。
 - **加固与签名**：业务 DEX 加密、壳注入、16 KB ZIP 对齐、V1 + V2 + V3 签名和 JSON 报告。
 - **可切换外观**：默认「经典绿青」，另有 3 套明亮皮肤；支持浅色、深色、跟随系统及自动记忆。
@@ -30,6 +31,19 @@
 
 设备工具右上角提供「无线连接」：支持 Android 11+ 二维码配对、配对码、设备发现和手动连接；旧版设备可先通过 USB 开启 TCP 调试。详见[设备工具说明](#设备工具说明)。
 
+### 通用开发工具
+
+点击侧栏「通用工具」，或按 **⌘K / Ctrl+K** 打开工具搜索。无需连接 Android 设备。
+
+| 工具 | 可以做什么 |
+| --- | --- |
+| JSON 工具 | 格式化、压缩、校验、错误位置提示，树形展开与字段 / 值搜索，JSONPath 查询；输出可直接送入对比工具 |
+| 文本对比 | 左右逐行差异、忽略空白、交换内容；JSON 模式按字段比较，忽略对象键顺序，区分缺失字段与 null |
+| 编码解码 | URL 组件、表单 URL、Base64 / Base64URL、Unicode、常用 HTML 实体、JSON 字符串转义及 JWT 内容 / 过期时间解析 |
+| 时间工具 | 秒 / 毫秒时间戳转换、IANA 时区转换、时间差计算、Unix 5 位与 Spring 6 位 Cron 的未来执行时间 |
+
+支持显式粘贴、打开 UTF-8 文本文件，以及复制 / 保存处理结果。切换工具或离开通用工具页后，输入和结果仍保留到应用关闭；不会自动读取剪贴板或持久保存输入历史。JWT 仅解析、不验签；Cron 仅预览、不执行任务。具体用法与输入限制见[通用工具说明](docs/developer-tools.md)。
+
 ### APK 与签名工具
 
 | 入口 | 可以做什么 |
@@ -51,7 +65,8 @@ APK 静态分析、签名与加固使用本机 JVM 库，不需要连接手机�
 3. **检查 APK**：进入「APK 体检」，点击「浏览」选择文件，再点击「开始体检」。需要查看具体内容时，进入 Manifest 或文件浏览；对比工具需分别选择旧包、新包。
 4. **生成码图**：进入「二维码与条形码」，选择格式、填写内容、生成预览，随后复制图片或保存 PNG。二维码支持可选中心图片、替换 / 移除及三档占比。
 5. **加固签名**：先在「签名百宝箱」填写 keystore、别名和密码，点击「验证并保存」；再进入「APK 加固」，选择输入与输出文件，点击「开始加固并签名」。
-6. **切换外观**：点击左下角「换肤」，选中皮肤和外观模式即可生效；「恢复默认」回到经典绿青与浅色模式。
+6. **处理日常开发数据**：打开「通用工具」，选择 JSON、文本对比、编码解码或时间工具；可先使用示例查看处理效果。
+7. **切换外观**：点击左下角「换肤」，选中皮肤和外观模式即可生效；「恢复默认」回到经典绿青与浅色模式。
 
 侧栏使用图标导航：当前工具显示名称，悬停可查看其他工具的名称与用途。文件输入框支持浏览选择或手动填写路径。
 
@@ -122,6 +137,19 @@ app-hardened-report.json
 <summary>二维码生成与预览</summary>
 
 ![生成二维码、调整规格并预览图片](docs/screenshots/barcode.jpg)
+
+</details>
+
+<details>
+<summary>通用开发：JSON、对比、编码与时间</summary>
+
+| JSON 格式化与查询 | 文本 / JSON 对比 |
+| :---: | :---: |
+| ![本地 JSON 格式化与查询工具](docs/screenshots/developer-json.jpg) | ![按 JSON 字段展示左右差异](docs/screenshots/developer-diff.jpg) |
+
+| 编码解码 | 时间与 Cron |
+| :---: | :---: |
+| ![中文和 Emoji 的 URL 编码转换](docs/screenshots/developer-codec.jpg) | ![指定时区的 Cron 后续执行时间](docs/screenshots/developer-time.jpg) |
 
 </details>
 
@@ -327,6 +355,7 @@ CLI 也接受 `--keystore`、`--storePass`、`--alias`、`--keyPass` 显式参�
 | `src/main/kotlin/com/apkharden/packager/Cli.kt` | 命令行加固入口 |
 | `src/main/kotlin/com/apkharden/packager/ui/` | 工具页面、公共控件、主题与皮肤设置 |
 | `src/main/kotlin/com/apkharden/packager/core/` | APK 分析、Manifest 处理、DEX 加密、重打包与签名 |
+| `src/main/kotlin/com/apkharden/packager/core/developer/`、`ui/developer/` | 通用工具的本地处理逻辑、界面和会话状态 |
 | `src/main/kotlin/com/apkharden/packager/device/` | ADB、无线连接、文件传输与剪贴板会话 |
 | `src/main/kotlin/com/apkharden/packager/signing/` | 签名配置、Windows DPAPI 与 macOS 钥匙串保护 |
 | `guard/`、`shell/`、`native/` | APK 内运行的守卫、加载器与 Native 解密实现 |
@@ -347,7 +376,7 @@ flowchart LR
     SETTINGS --> PREFS[Preferences / 系统密钥保护]
 ```
 
-主要依赖：Compose Desktop、Kotlin Coroutines、Kotlinx Serialization、apksig、ARSCLib、ZXing、JCodec、JNA 和 LWJGL NFD。具体版本见 [Gradle 依赖配置](build.gradle.kts)。
+主要依赖：Compose Desktop、Kotlin Coroutines、Kotlinx Serialization、apksig、ARSCLib、ZXing、JCodec、JNA、LWJGL NFD、JsonPath、cron-utils 和 java-diff-utils。具体版本见 [Gradle 依赖配置](build.gradle.kts)。
 
 修改 `guard/`、`shell/` 或 `native/` 后需要重建壳资源，再测试桌面加固与设备启动，不能仅编译桌面源码。现有脚本依赖 Windows Android 构建工具，详见[开发验证说明](docs/development.md#重建壳资源)。
 
