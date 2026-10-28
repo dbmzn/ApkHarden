@@ -8,7 +8,7 @@
 
 - **截图、录屏与实时镜像**：USB / Wi-Fi 连接，截图预览与标注、短视频录制，以及独立镜像窗口中的查看和操控。
 - **日常调试**：手机剪贴板、双向文件互传、日志过滤与故障诊断。
-- **通用开发**：JSON 格式化与查询、文本 / JSON 对比、编码解码、时间戳与 Cron 预览，以及 PNG / JPEG 批量压缩，均在本机处理。
+- **通用开发**：JSON 格式化与查询、文本 / JSON 对比、编码解码、时间戳与 Cron 预览，以及 PNG / JPEG / WebP 压缩、转换、缩放与裁剪，均在本机处理。
 - **发布检查**：APK 体检、Manifest 查看、文件浏览、版本对比和包体增量分析。
 - **加固与签名**：业务 DEX 加密、壳注入、16 KB ZIP 对齐、V1 + V2 + V3 签名和 JSON 报告。
 - **可切换外观**：默认「经典绿青」，另有 3 套明亮皮肤；支持浅色、深色、跟随系统及自动记忆。
@@ -41,11 +41,11 @@
 | 文本对比 | 左右逐行差异、忽略空白、交换内容；JSON 模式按字段比较，忽略对象键顺序，区分缺失字段与 null |
 | 编码解码 | URL 组件、表单 URL、Base64 / Base64URL、Unicode、常用 HTML 实体、JSON 字符串转义及 JWT 内容 / 过期时间解析 |
 | 时间工具 | 秒 / 毫秒时间戳转换、IANA 时区转换、时间差计算、Unix 5 位与 Spring 6 位 Cron 的未来执行时间 |
-| 图片压缩 | 静态 PNG / JPEG 智能压缩与无损优化，三档质量，批量处理，前后对比与同步放大，安全另存 |
+| 图片工具 | PNG / JPEG / WebP 压缩与互转、等比 / 指定宽高 / 百分比缩放、拖框与像素裁剪、透明背景合成、批量预览另存 |
 
 支持显式粘贴、打开 UTF-8 文本文件，以及复制 / 保存处理结果。切换工具或离开通用工具页后，输入和结果仍保留到应用关闭；不会自动读取剪贴板或持久保存输入历史。JWT 仅解析、不验签；Cron 仅预览、不执行任务。具体用法与输入限制见[通用工具说明](docs/developer-tools.md)。
 
-图片压缩不改变尺寸与格式，不覆盖原图；压缩后更大则保留原始文件。macOS 分发包已内置引擎，Windows / Linux 需额外配置。使用方法、平台范围及实测数据见[图片压缩说明](docs/image-tools.md)。
+纯压缩保留尺寸和格式；实际转换、缩放、裁剪会保留用户要求的编辑结果。所有操作均不覆盖原图。macOS 分发包已内置引擎，Windows / Linux 需额外配置。使用方法、平台范围及实测数据见[图片工具说明](docs/image-tools.md)。
 
 ### APK 与签名工具
 
@@ -68,7 +68,7 @@ APK 静态分析、签名与加固使用本机 JVM 库，不需要连接手机�
 3. **检查 APK**：进入「APK 体检」，点击「浏览」选择文件，再点击「开始体检」。需要查看具体内容时，进入 Manifest 或文件浏览；对比工具需分别选择旧包、新包。
 4. **生成码图**：进入「二维码与条形码」，选择格式、填写内容、生成预览，随后复制图片或保存 PNG。二维码支持可选中心图片、替换 / 移除及三档占比。
 5. **加固签名**：先在「签名百宝箱」填写 keystore、别名和密码，点击「验证并保存」；再进入「APK 加固」，选择输入与输出文件，点击「开始加固并签名」。
-6. **处理日常开发数据**：打开「通用工具」，选择 JSON、文本对比、编码解码、时间工具或图片压缩；图片可多选后批量压缩、预览并另存。
+6. **处理日常开发数据**：打开「通用工具」，选择 JSON、文本对比、编码解码、时间工具或图片工具；图片可多选后批量压缩、转换、缩放，逐张裁剪后预览另存。
 7. **切换外观**：点击左下角「换肤」，选中皮肤和外观模式即可生效；「恢复默认」回到经典绿青与浅色模式。
 
 侧栏使用图标导航：当前工具显示名称，悬停可查看其他工具的名称与用途。文件输入框支持浏览选择或手动填写路径。
@@ -144,7 +144,7 @@ app-hardened-report.json
 </details>
 
 <details>
-<summary>通用开发：JSON、对比、编码、时间与图片压缩</summary>
+<summary>通用开发：JSON、对比、编码、时间与图片工具</summary>
 
 | JSON 格式化与查询 | 文本 / JSON 对比 |
 | :---: | :---: |
@@ -159,6 +159,8 @@ app-hardened-report.json
 | 本地图片压缩 · 浅色 | 本地图片压缩 · 深色 |
 | :---: | :---: |
 | ![图片压缩队列和前后对比](docs/screenshots/image-compression-light.png) | ![深色外观下的图片压缩](docs/screenshots/image-compression-dark.png) |
+
+![图片转换、尺寸与裁剪设置](docs/screenshots/image-edit-settings.png)
 
 </details>
 
@@ -365,7 +367,7 @@ CLI 也接受 `--keystore`、`--storePass`、`--alias`、`--keyPass` 显式参�
 | `src/main/kotlin/com/apkharden/packager/ui/` | 工具页面、公共控件、主题与皮肤设置 |
 | `src/main/kotlin/com/apkharden/packager/core/` | APK 分析、Manifest 处理、DEX 加密、重打包与签名 |
 | `src/main/kotlin/com/apkharden/packager/core/developer/`、`ui/developer/` | 通用工具的本地处理逻辑、界面和会话状态 |
-| `src/main/kotlin/com/apkharden/packager/core/image/`、`ui/image/` | 本地图片压缩、批量队列、预览与导出 |
+| `src/main/kotlin/com/apkharden/packager/core/image/`、`ui/image/` | 图片压缩 / 转换 / 缩放 / 裁剪、批量队列、预览与导出 |
 | `scripts/prepare-image-tools.py` | macOS 图片引擎构建、校验与许可证 / 源码打包 |
 | `src/main/kotlin/com/apkharden/packager/device/` | ADB、无线连接、文件传输与剪贴板会话 |
 | `src/main/kotlin/com/apkharden/packager/signing/` | 签名配置、Windows DPAPI 与 macOS 钥匙串保护 |

@@ -39,7 +39,7 @@ class ImageWorkspaceUiTest {
             val result = state.image.rows.single().result!!
             assertTrue(result.size <= result.input.size)
             onNodeWithText("JSON 工具").performClick()
-            onNodeWithText("图片压缩").performClick()
+            onNodeWithText("图片工具").performClick()
             assertSame(result, state.image.rows.single().result)
             onNodeWithText("放大 1×").performClick()
             onNodeWithText("放大 2×").assertExists()

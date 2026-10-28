@@ -18,6 +18,7 @@ CACHE = Path.home() / '.gradle/caches/apkharden/image-tools'
 WORK = ROOT / 'build/image-tools-build'
 OUT = ROOT / 'build/app-resources/macos/image-tools'
 SOURCES = {
+    'webp': ('https://codeload.github.com/webmproject/libwebp/tar.gz/refs/tags/v1.6.0', '93a852c2b3efafee3723efd4636de855b46f9fe1efddd607e1f42f60fc8f2136'),
     'zlib': ('https://codeload.github.com/madler/zlib/tar.gz/refs/tags/v1.3.1', '17e88863f3600672ab49182f217281b6fc4d3c762bde361935e436a95214d05c'),
     'pngquant': ('https://codeload.github.com/kornelski/pngquant/tar.gz/refs/tags/2.18.0', '424ff432e51dfc3cf5ff8001ad1b64198850686c5e3c26ecd477e4b69ef4fade'),
     'imagequant': ('https://codeload.github.com/ImageOptim/libimagequant/tar.gz/refs/tags/2.17.0', '9f6cc50182be4d2ece75118aa0b0fd3e9bbad06e94fd6b9eb3a4c08129c2dd26'),
@@ -65,7 +66,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     signature = hashlib.sha256(Path(__file__).read_bytes()).hexdigest() + platform.machine()
     stamp = OUT / '.build-id'
-    tools = ['pngquant', 'oxipng', 'cjpeg', 'djpeg', 'jpegtran']
+    tools = ['pngquant', 'oxipng', 'cjpeg', 'djpeg', 'jpegtran', 'cwebp', 'dwebp']
     if stamp.exists() and stamp.read_text() == signature and all((OUT / t).is_file() for t in tools):
         print('Image tools already built')
         return
@@ -100,14 +101,23 @@ def main():
     shutil.copy2(oxi / 'oxipng', OUT / 'oxipng')
     for name in ['cjpeg', 'djpeg', 'jpegtran']:
         shutil.copy2(jpeg / 'out' / (name + '-static'), OUT / name)
+    webp = unpack('webp')
+    run(cmake, '-S', webp, '-B', webp / 'out', '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_SHARED_LIBS=OFF',
+        '-DPNG_LIBRARY=' + str(png / 'out/libpng16.a'), '-DPNG_PNG_INCLUDE_DIR=' + str(png / 'out'),
+        '-DCMAKE_DISABLE_FIND_PACKAGE_JPEG=TRUE', '-DCMAKE_DISABLE_FIND_PACKAGE_TIFF=TRUE',
+        '-DWEBP_BUILD_ANIM_UTILS=OFF', '-DWEBP_BUILD_GIF2WEBP=OFF', '-DWEBP_BUILD_IMG2WEBP=OFF',
+        '-DWEBP_BUILD_VWEBP=OFF', '-DWEBP_BUILD_WEBPMUX=OFF', '-DWEBP_BUILD_EXTRAS=OFF')
+    run(cmake, '--build', webp / 'out', '--target', 'cwebp', 'dwebp', '--parallel', '4')
+    for name in ['cwebp', 'dwebp']:
+        shutil.copy2(webp / 'out' / name, OUT / name)
     # Standalone GPL tools retain their own license; ship exact corresponding sources.
     notices = OUT / 'licenses'
     notices.mkdir(exist_ok=True)
-    for name, source in [('pngquant', quant), ('imagequant', iq), ('png', png), ('mozjpeg', jpeg), ('oxipng', oxi), ('zlib', zlib)]:
+    for name, source in [('pngquant', quant), ('imagequant', iq), ('png', png), ('mozjpeg', jpeg), ('oxipng', oxi), ('zlib', zlib), ('webp', webp)]:
         for file in source.iterdir():
-            if file.is_file() and any(s in file.name.lower() for s in ['license', 'copying', 'copyright']):
+            if file.is_file() and any(s in file.name.lower() for s in ['license', 'copying', 'copyright', 'patents', 'authors']):
                 shutil.copy2(file, notices / (name + '-' + file.name))
-    for name in ['pngquant', 'imagequant', 'png', 'mozjpeg', 'zlib']:
+    for name in ['pngquant', 'imagequant', 'png', 'mozjpeg', 'zlib', 'webp']:
         shutil.copy2(fetch(name), notices / (name + '-source.tar.gz'))
     shutil.copy2(__file__, notices / 'prepare-image-tools.py')
     for name in tools:

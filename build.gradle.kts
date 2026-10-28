@@ -86,7 +86,7 @@ val prepareScrcpyResources by tasks.registering(Sync::class) {
 }
 val prepareImageTools by tasks.registering(Exec::class) {
     group = "apkharden"
-    description = "Build and bundle local PNG/JPEG compression engines on macOS."
+    description = "Build and bundle local PNG/JPEG/WebP image engines on macOS."
     onlyIf { isMac }
     commandLine("python3", "scripts/prepare-image-tools.py")
 }
@@ -131,7 +131,11 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
-    if (isMac) dependsOn(prepareImageTools)
+    if (isMac) {
+        dependsOn(prepareImageTools)
+        inputs.dir(layout.buildDirectory.dir("app-resources/macos/image-tools"))
+    }
+    inputs.property("imageToolsOverride", System.getenv("APK_HARDEN_IMAGE_TOOLS").orEmpty())
     if (isMac) jvmArgs("--add-exports=java.desktop/sun.awt.datatransfer=ALL-UNNAMED")
     // Opt-in integration checks must not be reused from an ordinary unit-test run.
     inputs.property("deviceVerification", System.getenv("APK_HARDEN_DEVICE_TEST").orEmpty())
@@ -200,7 +204,7 @@ tasks.configureEach {
                     check(File(resources, name).setExecutable(true, false)) { "Cannot mark $name executable" }
                 }
                 val imageTools = File(resources.parentFile, "image-tools")
-                listOf("pngquant", "oxipng", "cjpeg", "djpeg", "jpegtran").forEach { name ->
+                listOf("pngquant", "oxipng", "cjpeg", "djpeg", "jpegtran", "cwebp", "dwebp").forEach { name ->
                     check(File(imageTools, name).setExecutable(true, false)) { "Cannot mark $name executable" }
                 }
             }

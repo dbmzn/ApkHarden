@@ -10,19 +10,27 @@ internal class ImageRow(val input: ImageInput) {
     var error by mutableStateOf<String?>(null)
     var processing by mutableStateOf(false)
     var exported by mutableStateOf<File?>(null)
+    var crop by mutableStateOf<CropRegion?>(null)
+    var appliedSettings: ImageEditSettings? = null
+    var appliedCrop: CropRegion? = null
 }
 
 internal class ImageWorkspaceState : AutoCloseable {
     // Owned by App, not a navigation page: tasks survive switching tools.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val session by lazy { ImageCompressionSession() }
+    private val sessionDelegate = lazy { ImageCompressionSession() }
+    private val session by sessionDelegate
     val rows = mutableStateListOf<ImageRow>()
     var selected by mutableStateOf<ImageRow?>(null)
     var mode by mutableStateOf(ImageMode.SMART)
     var quality by mutableStateOf(ImageQuality.BALANCED)
+    var settings by mutableStateOf(ImageEditSettings())
+    var showEditor by mutableStateOf(false)
+    var editDraft: ImageEditDraft? = null
+    val hasEdits: Boolean get() = settings.active || rows.any { it.crop != null }
     var busy by mutableStateOf(false)
     var cancelling by mutableStateOf(false)
-    var status by mutableStateOf("选择 PNG / JPEG，在本机批量压缩")
+    var status by mutableStateOf("选择 PNG / JPEG / WebP，在本机批量处理")
     var error by mutableStateOf<String?>(null)
     private var job: Job? = null
 
@@ -48,7 +56,7 @@ internal class ImageWorkspaceState : AutoCloseable {
     }
 
     fun compress() = launch {
-        val chosenMode = mode; val chosenQuality = quality
+        val chosenMode = mode; val chosenQuality = quality; val chosenSettings = settings
         var done = 0
         val batch = rows.toList()
         for ((index, row) in batch.withIndex()) {
@@ -59,10 +67,11 @@ internal class ImageWorkspaceState : AutoCloseable {
             try {
                 val currentJob = currentCoroutineContext().job
                 val result = withContext(Dispatchers.IO) {
-                    session.compress(row.input, chosenMode, chosenQuality) { cancelling || !currentJob.isActive }
+                    session.process(row.input, chosenMode, chosenQuality, chosenSettings, row.crop) { cancelling || !currentJob.isActive }
                 }
                 row.result?.file?.delete()
                 row.result = result; row.exported = null; done++
+                row.appliedSettings = chosenSettings; row.appliedCrop = row.crop
             } catch (cancelled: CancellationException) {
                 if (!isActive) throw cancelled
                 row.error = "已取消；上次结果（如有）仍保留"
@@ -79,6 +88,7 @@ internal class ImageWorkspaceState : AutoCloseable {
         for (row in rows.toList()) {
             ensureActive()
             if (cancelling) break
+            if (!isCurrent(row)) continue
             val result = row.result ?: continue
             try {
                 row.exported = withContext(Dispatchers.IO) { session.export(result, folder) }; count++
@@ -88,9 +98,14 @@ internal class ImageWorkspaceState : AutoCloseable {
         error = failures.take(3).joinToString("\n").takeIf(String::isNotEmpty)
     }
 
+    fun isCurrent(row: ImageRow): Boolean = row.result?.let {
+        it.mode == mode && it.quality == quality && row.appliedSettings == settings && row.appliedCrop == row.crop
+    } == true
+
     fun remove(row: ImageRow) {
         if (busy) return
         rows.remove(row)
+        if (editDraft?.row === row) { editDraft = null; showEditor = false }
         if (selected == row) selected = rows.firstOrNull()
         session.remove(row.input, row.result)
     }
@@ -115,6 +130,6 @@ internal class ImageWorkspaceState : AutoCloseable {
         scope.cancel()
         // Wait for native processes to stop before removing their temporary working files.
         val pending = job
-        CoroutineScope(Dispatchers.IO).launch { pending?.join(); session.close() }
+        CoroutineScope(Dispatchers.IO).launch { pending?.join(); if (sessionDelegate.isInitialized()) session.close() }
     }
 }

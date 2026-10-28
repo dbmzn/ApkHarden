@@ -12,14 +12,14 @@ internal enum class ImageMode(val title: String) { SMART("智能压缩"), LOSSLE
 internal enum class ImageQuality(val title: String, val jpeg: Int, val pngMin: Int, val pngMax: Int) {
     SMALL("体积优先", 82, 65, 85), BALANCED("均衡", 90, 80, 95), HIGH("画质优先", 95, 90, 100),
 }
-internal enum class ImageKind(val extension: String) { PNG("png"), JPEG("jpg") }
+internal enum class ImageKind(val extension: String) { PNG("png"), JPEG("jpg"), WEBP("webp") }
 internal data class ImageInfo(val kind: ImageKind, val width: Int, val height: Int, val bitDepth: Int,
     val hasColorProfile: Boolean, val orientation: Int = 1)
 internal data class ImageInput(val original: File, val snapshot: File, val info: ImageInfo) {
     val size: Long get() = snapshot.length()
 }
 internal data class ImageResult(val input: ImageInput, val file: File, val mode: ImageMode,
-    val quality: ImageQuality, val note: String) {
+    val quality: ImageQuality, val note: String, val info: ImageInfo = input.info, val transformed: Boolean = false) {
     val size: Long get() = file.length()
     val saved: Long get() = input.size - size
     val percent: Double get() = if (input.size == 0L) 0.0 else saved * 100.0 / input.size
@@ -28,7 +28,7 @@ internal data class ImageResult(val input: ImageInput, val file: File, val mode:
 internal class ImageEngines(private val directory: File = locate()) : AutoCloseable {
     private val processes = java.util.concurrent.ConcurrentHashMap.newKeySet<Process>()
     companion object {
-        val names = listOf("pngquant", "oxipng", "cjpeg", "djpeg", "jpegtran")
+        val names = listOf("pngquant", "oxipng", "cjpeg", "djpeg", "jpegtran", "cwebp", "dwebp")
         private fun locate(): File {
             System.getenv("APK_HARDEN_IMAGE_TOOLS")?.takeIf(String::isNotBlank)?.let { return File(it) }
             System.getProperty("compose.application.resources.dir")?.let { return File(it, "image-tools") }
@@ -77,6 +77,7 @@ internal class ImageCompressionSession(val engines: ImageEngines = ImageEngines(
     companion object {
         const val MAX_BYTES = 32L * 1024 * 1024
         const val MAX_PIXELS = 24_000_000L
+        const val MAX_RESULT_BYTES = 128L * 1024 * 1024
         const val MAX_SESSION_BYTES = 256L * 1024 * 1024
         const val MAX_FILES = 100
     }
@@ -114,6 +115,8 @@ internal class ImageCompressionSession(val engines: ImageEngines = ImageEngines(
                     else note = "颜色量化未达到画质门槛，已回退无损优化"
                 } else if (mode == ImageMode.SMART) note = "高位深或含色彩配置的 PNG，已回退无损优化"
                 engines.run("oxipng", listOf("-o", "3", "--out", candidate.path, "--", source.path), work, cancelled)
+            } else if (input.info.kind == ImageKind.WEBP) {
+                engines.run("cwebp", webpEncodeArgs(mode, quality) + listOf("-metadata", "all", "-o", candidate.path, "--", input.snapshot.path), work, cancelled)
             } else if (mode == ImageMode.LOSSLESS) {
                 engines.run("jpegtran", listOf("-copy", "all", "-optimize", "-progressive", "-outfile", candidate.path, input.snapshot.path), work, cancelled)
             } else {
@@ -126,6 +129,7 @@ internal class ImageCompressionSession(val engines: ImageEngines = ImageEngines(
             }
             check(candidate.isFile && candidate.length() > 0) { "压缩引擎未生成有效图片" }
             if (cancelled()) throw CancellationException("已取消")
+            check(candidate.length() <= MAX_RESULT_BYTES) { "结果超过 128 MB" }
             val resultInfo = inspectImage(candidate.readBytes())
             check(resultInfo.width == input.info.width && resultInfo.height == input.info.height && resultInfo.kind == input.info.kind) {
                 "结果尺寸或格式异常，未采用压缩结果"
@@ -141,12 +145,17 @@ internal class ImageCompressionSession(val engines: ImageEngines = ImageEngines(
         } finally { work.deleteRecursively() }
     }
 
+    fun process(input: ImageInput, mode: ImageMode, quality: ImageQuality, settings: ImageEditSettings,
+        crop: CropRegion? = null, cancelled: () -> Boolean = { false }): ImageResult =
+        transformImage(this, input, mode, quality, settings, crop, cancelled)
+
     fun export(result: ImageResult, folder: File): File {
         require(folder.isDirectory) { "请选择存在的输出文件夹" }
         val base = result.input.original.nameWithoutExtension
         for (index in 0..10000) {
             val suffix = if (index == 0) "" else "-$index"
-            val target = File(folder, "$base-compressed$suffix.${result.input.info.kind.extension}")
+            val action = if (result.transformed) "processed" else "compressed"
+            val target = File(folder, "$base-$action$suffix.${result.info.kind.extension}")
             try {
                 // CREATE_NEW reserves a name atomically; existing files and symlinks are not touched.
                 Files.createFile(target.toPath())
@@ -171,10 +180,11 @@ private fun int32(bytes: ByteArray, offset: Int): Int =
         ((bytes[offset + 2].toInt() and 255) shl 8) or (bytes[offset + 3].toInt() and 255)
 
 internal fun inspectImage(bytes: ByteArray): ImageInfo {
-    require(bytes.size <= ImageCompressionSession.MAX_BYTES) { "图片超过 32 MB" }
+    require(bytes.size <= ImageCompressionSession.MAX_RESULT_BYTES) { "图片超过 128 MB" }
+    if (isWebp(bytes)) return inspectWebp(bytes)
     val png = bytes.size >= 8 && bytes.copyOfRange(0, 8).contentEquals(byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10))
     val jpeg = bytes.size >= 4 && bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte()
-    require(png || jpeg) { "仅支持静态 PNG 和 JPEG 图片" }
+    require(png || jpeg) { "仅支持静态 PNG、JPEG 和 WebP 图片" }
     var depth = 8
     var profile = false
     var orientation = 1
@@ -189,6 +199,7 @@ internal fun inspectImage(bytes: ByteArray): ImageInfo {
             if (type == "IHDR") { require(length == 13) { "PNG 头部无效" }; depth = bytes[position + 16].toInt() and 255 }
             // Keep profile-bearing or EXIF-bearing PNGs on the lossless route.
             if (type in listOf("iCCP", "cHRM", "gAMA", "eXIf")) profile = true
+            if (type == "eXIf") orientation = metadataOrientation(bytes.copyOfRange(position + 8, position + 8 + length)) ?: 1
             position += length + 12
             if (type == "IEND") { end = true; break }
         }
@@ -199,7 +210,7 @@ internal fun inspectImage(bytes: ByteArray): ImageInfo {
                 "暂不支持含多幅图像或增益图的 JPEG，请先导出普通静态 JPEG"
             }
             if (segment.marker == 0xe2) profile = true
-            if (segment.marker == 0xe1) orientation = exifOrientation(segment.bytes) ?: orientation
+            if (segment.marker == 0xe1) orientation = metadataOrientation(segment.bytes.copyOfRange(4, segment.bytes.size)) ?: orientation
             if (segment.marker in listOf(0xc0, 0xc1, 0xc2)) {
                 require(segment.bytes.size >= 10 && segment.bytes[4].toInt() == 8 && segment.bytes[9].toInt() in listOf(1, 3)) {
                     "暂不支持高位深或 CMYK JPEG"
@@ -247,42 +258,47 @@ internal fun restoreJpegMetadata(original: ByteArray, encoded: ByteArray): ByteA
     return encoded.copyOfRange(0, offset) + metadata + encoded.copyOfRange(offset, encoded.size)
 }
 
-/** Parse just IFD0 orientation; all EXIF bytes are retained verbatim during compression. */
-private fun exifOrientation(segment: ByteArray): Int? = runCatching {
-    if (segment.size < 18 || String(segment, 4, 6, Charsets.US_ASCII) != "Exif\u0000\u0000") return null
-    val buffer = java.nio.ByteBuffer.wrap(segment, 10, segment.size - 10).slice()
-    buffer.order(if (buffer.get(0) == 'I'.code.toByte()) java.nio.ByteOrder.LITTLE_ENDIAN else java.nio.ByteOrder.BIG_ENDIAN)
-    val ifd = buffer.getInt(4)
-    val count = buffer.getShort(ifd).toInt() and 65535
-    for (i in 0 until count.coerceAtMost(1024)) {
-        val p = ifd + 2 + i * 12
-        if ((buffer.getShort(p).toInt() and 65535) == 0x112) return (buffer.getShort(p + 8).toInt() and 65535).takeIf { it in 1..8 }
-    }
-    null
-}.getOrNull()
-
-/** Decode a bounded preview, then respect EXIF orientation for both sides. */
-internal fun imagePreview(file: File, orientation: Int, maximum: Int = 1800): BufferedImage {
-    ImageIO.createImageInputStream(file).use { stream ->
-        val readers = ImageIO.getImageReaders(stream)
-        require(readers.hasNext()) { "无法预览图片" }
-        val reader = readers.next()
-        try {
-            reader.input = stream
-            val sample = ((maxOf(reader.getWidth(0), reader.getHeight(0)) + maximum - 1) / maximum).coerceAtLeast(1)
-            val image = reader.read(0, reader.defaultReadParam.apply { setSourceSubsampling(sample, sample, 0, 0) })
-            if (orientation == 1) return image
-            val w = image.width; val h = image.height
-            val rotated = BufferedImage(if (orientation >= 5) h else w, if (orientation >= 5) w else h, BufferedImage.TYPE_INT_ARGB)
-            for (y in 0 until h) for (x in 0 until w) {
-                val (dx, dy) = when (orientation) {
-                    2 -> w - 1 - x to y; 3 -> w - 1 - x to h - 1 - y; 4 -> x to h - 1 - y
-                    5 -> y to x; 6 -> h - 1 - y to x; 7 -> h - 1 - y to w - 1 - x; 8 -> y to w - 1 - x
-                    else -> x to y
+/** Decode a bounded, color-managed preview; full-resolution editing uses maximum = Int.MAX_VALUE. */
+internal fun imagePreview(file: File, orientation: Int, maximum: Int = 1800,
+    engines: ImageEngines = ImageEngines(), cancelled: () -> Boolean = { false }): BufferedImage {
+    require(file.length() <= ImageCompressionSession.MAX_RESULT_BYTES) { "图片超过 128 MB" }
+    val bytes = file.readBytes()
+    val info = inspectImage(bytes)
+    var temporary: File? = null
+    try {
+        val decoded = if (info.kind == ImageKind.WEBP) {
+            val work = Files.createTempDirectory("apkharden-webp-preview-").toFile(); temporary = work
+            val png = File(work, "decoded.png")
+            val ratio = minOf(1.0, maximum.toDouble() / maxOf(info.width, info.height))
+            val resize = if (ratio < 1) listOf("-resize", maxOf(1, (info.width * ratio).toInt()).toString(), maxOf(1, (info.height * ratio).toInt()).toString()) else emptyList()
+            engines.run("dwebp", resize + listOf("-o", png.path, "--", file.absolutePath), work, cancelled)
+            png
+        } else file
+        ImageIO.createImageInputStream(decoded).use { stream ->
+            val readers = ImageIO.getImageReaders(stream)
+            require(readers.hasNext()) { "无法预览图片" }
+            val reader = readers.next()
+            try {
+                reader.input = stream
+                val sample = ((maxOf(reader.getWidth(0), reader.getHeight(0)).toLong() + maximum - 1) / maximum).toInt().coerceAtLeast(1)
+                val raw = reader.read(0, reader.defaultReadParam.apply { setSourceSubsampling(sample, sample, 0, 0) })
+                val image = normalizeImageColor(raw, bytes, info.kind)
+                if (orientation == 1) return image
+                val w = image.width; val h = image.height
+                val rotated = BufferedImage(if (orientation >= 5) h else w, if (orientation >= 5) w else h, BufferedImage.TYPE_INT_ARGB)
+                for (y in 0 until h) {
+                    if (cancelled()) throw CancellationException("已取消")
+                    for (x in 0 until w) {
+                        val (dx, dy) = when (orientation) {
+                            2 -> w - 1 - x to y; 3 -> w - 1 - x to h - 1 - y; 4 -> x to h - 1 - y
+                            5 -> y to x; 6 -> h - 1 - y to x; 7 -> h - 1 - y to w - 1 - x; 8 -> y to w - 1 - x
+                            else -> x to y
+                        }
+                        rotated.setRGB(dx, dy, image.getRGB(x, y))
+                    }
                 }
-                rotated.setRGB(dx, dy, image.getRGB(x, y))
-            }
-            return rotated
-        } finally { reader.dispose() }
-    }
+                return rotated
+            } finally { reader.dispose() }
+        }
+    } finally { temporary?.deleteRecursively() }
 }

@@ -10,7 +10,7 @@ internal enum class DeveloperTool(val title: String, val keywords: String) {
     DIFF("文本对比", "diff 文本 比较 差异 json"),
     CODEC("编码解码", "url base64 unicode html jwt 转义 字符串"),
     TIME("时间工具", "时间戳 timestamp 时区 日期 cron 定时 时间差"),
-    IMAGE("图片压缩", "图片 压缩 png jpeg jpg 照片 无损 批量 image"),
+    IMAGE("图片工具", "图片 压缩 转换 裁剪 尺寸 缩放 png jpeg jpg webp 照片 无损 批量 image"),
 }
 internal class ToolTask {
     var busy by mutableStateOf(false)
