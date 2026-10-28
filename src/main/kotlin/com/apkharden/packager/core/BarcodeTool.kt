@@ -15,7 +15,7 @@ import javax.imageio.ImageIO
 
 internal enum class CodeKind(val label: String, val format: BarcodeFormat, val help: String, val example: String) {
     QR("二维码", BarcodeFormat.QR_CODE, "支持文字、中文、链接和多行内容", "https://example.com"),
-    CODE128("Code 128", BarcodeFormat.CODE_128, "1–80 个可打印英文字符或数字", "ApkHarden-2026"),
+    CODE128("Code 128", BarcodeFormat.CODE_128, "1–80 个可打印英文字符或数字", "WorkKit-2026"),
     EAN13("EAN-13", BarcodeFormat.EAN_13, "12 或 13 位数字；12 位时自动补齐校验位", "690123456789"),
     EAN8("EAN-8", BarcodeFormat.EAN_8, "7 或 8 位数字；7 位时自动补齐校验位", "9638507"),
     CODE39("Code 39", BarcodeFormat.CODE_39, "1–80 个大写字母、数字，或 - . 空格 $ / + %", "APK-2026"),

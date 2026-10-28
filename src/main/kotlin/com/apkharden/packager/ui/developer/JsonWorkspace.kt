@@ -45,7 +45,7 @@ internal fun JsonWorkspace(state: JsonWorkspaceState, onCompare: (String) -> Uni
                 state.edit("""{
   "requestId": 9223372036854775808,
   "items": [
-    {"name": "ApkHarden", "price": 12.50, "enabled": true},
+    {"name": "WorkKit", "price": 12.50, "enabled": true},
     {"name": "开发工具", "price": 8.20, "enabled": false}
   ]
 }""")

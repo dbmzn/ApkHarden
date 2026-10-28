@@ -1,5 +1,6 @@
 package com.apkharden.packager.ui.adb
 
+import com.apkharden.packager.ProductIdentity
 import com.apkharden.packager.device.AdbDeviceService
 import com.apkharden.packager.device.AndroidDevice
 import com.apkharden.packager.device.buildScrcpyMirrorArgs
@@ -23,7 +24,7 @@ internal enum class MirrorPhase {
 
 internal data class MirrorStatus(val phase: MirrorPhase, val message: String)
 
-/** Launches one controllable scrcpy window and keeps its lifecycle tied to ApkHarden. */
+/** Launches one controllable scrcpy window and keeps its lifecycle tied to WorkKit. */
 internal class DetachedScrcpySession {
     private val lock = Any()
     @Volatile private var requestedSerial: String? = null
@@ -84,7 +85,7 @@ internal class DetachedScrcpySession {
                     ).coerceAtLeast(480),
             )
             if (!isCurrent(currentGeneration)) return
-            val title = "ApkHarden · ${device.model} · ${UUID.randomUUID()}"
+            val title = "${ProductIdentity.TITLE} · ${device.model} · ${UUID.randomUUID()}"
             val launched = ProcessBuilder(
                 listOf(executable.absolutePath) + buildScrcpyMirrorArgs(
                     serial = device.serial,

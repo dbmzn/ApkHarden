@@ -6,4 +6,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "ApkHarden"
+rootProject.name = "WorkKit"

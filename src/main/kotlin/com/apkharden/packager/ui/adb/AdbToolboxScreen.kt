@@ -1,5 +1,6 @@
 package com.apkharden.packager.ui.adb
 
+import com.apkharden.packager.ProductIdentity
 import com.apkharden.packager.ui.common.ToolButton as Button
 import com.apkharden.packager.ui.common.ToolOutlinedButton as OutlinedButton
 import com.apkharden.packager.ui.common.ToolTextField as OutlinedTextField
@@ -580,7 +581,7 @@ private val CAPTURE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
 internal fun captureFile(kind: String, extension: String, now: LocalDateTime = LocalDateTime.now()): File {
     val downloads = File(System.getProperty("user.home"), "Downloads").apply { mkdirs() }
-    return File(downloads, "ApkHarden-$kind-${now.format(CAPTURE_TIME)}.$extension")
+    return File(downloads, "${ProductIdentity.ENGLISH_NAME}-$kind-${now.format(CAPTURE_TIME)}.$extension")
 }
 
 internal fun windowsRevealFileCommand(file: File): List<String> =

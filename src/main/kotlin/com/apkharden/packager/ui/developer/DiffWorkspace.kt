@@ -40,8 +40,8 @@ internal fun DiffWorkspace(state: DiffWorkspaceState) {
                 val old = state.left; state.left = state.right; state.right = old; state.changed()
             }) { Text("交换左右") }
             TextButton(enabled = !task.busy, onClick = {
-                state.left = "{\"name\":\"ApkHarden\",\"version\":1,\"enabled\":true}"
-                state.right = "{\"enabled\":true,\"name\":\"ApkHarden\",\"version\":2,\"tools\":4}"
+                state.left = "{\"name\":\"WorkKit\",\"version\":1,\"enabled\":true}"
+                state.right = "{\"enabled\":true,\"name\":\"WorkKit\",\"version\":2,\"tools\":4}"
                 state.jsonMode = true; state.changed()
             }) { Text("填入示例") }
         }

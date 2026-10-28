@@ -21,7 +21,7 @@ class ImageEditUiTest {
         val file = File(folder, "透明图形.png")
         val image = BufferedImage(640, 420, BufferedImage.TYPE_INT_ARGB)
         val g = image.createGraphics(); g.color = Color(30, 130, 95, 180); g.fillRoundRect(30, 40, 580, 340, 60, 60)
-        g.color = Color(30, 50, 40); g.font = g.font.deriveFont(32f); g.drawString("ApkHarden · 图片工具", 130, 220); g.dispose()
+        g.color = Color(30, 50, 40); g.font = g.font.deriveFont(32f); g.drawString("百工WorkKit · 图片工具", 130, 220); g.dispose()
         ImageIO.write(image, "png", file)
         return file
     }

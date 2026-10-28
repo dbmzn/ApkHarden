@@ -40,7 +40,7 @@ object ApkRepackager {
         ZipFile(input).use { inputZip ->
             val names = inputZip.entries().asSequence().map { it.name }.toSet()
             require(names.none { it.startsWith(Constants.PAYLOAD_DIRECTORY) }) {
-                "APK already contains an encrypted ApkHarden payload"
+                "APK 已包含百工WorkKit加固载荷，请使用原始 APK"
             }
             require(nativeLibraries.keys.none { abi ->
                 "lib/$abi/${Constants.SHELL_LIBRARY_NAME}" in names

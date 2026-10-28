@@ -1,6 +1,8 @@
-# ApkHarden
+# 百工WorkKit
 
 **把设备调试、日常开发和 APK 处理，放进一个桌面工具箱。**
+
+百工（英文名 `WorkKit`）由 ApkHarden 更名而来。应用窗口、安装包和新导出文件使用新名称，原有外观与签名配置继续使用兼容的存储标识。
 
 面向 Android、Web 和后端开发者的本地桌面工具箱。连接手机即可截图、录屏、镜像和互传文件；无需连接设备，也能处理 JSON、比较文本、转换编码、计算时间，以及压缩、转换、缩放和裁剪图片。Android 发布环节还提供 APK 分析、版本对比、加固与签名管理。
 
@@ -109,7 +111,7 @@ app-hardened-report.json
 
 ## 界面预览
 
-以下展示实际桌面界面及 Compose 自动化渲染的图片工具页面，默认使用「经典绿青」。APK 结果使用独立测试包，签名配置为空；图片工具使用透明测试图形。截图来源见[说明](docs/screenshots/README.md)，点击图片可查看原图。
+以下展示实际桌面界面及 Compose 自动化渲染的图片工具页面，默认使用「经典绿青」。APK 结果使用独立测试包，签名配置为空；图片工具使用透明测试图形。部分设备、APK 与通用工具截图采集于更名前，窗口中仍显示 ApkHarden；图片工具演示已同步新名称。截图来源见[说明](docs/screenshots/README.md)，点击图片可查看原图。
 
 ### 截图与录屏
 
@@ -260,9 +262,9 @@ USB 使用前确认 `adb devices -l` 能列出目标设备且状态为 `device`�
 自动保存的文件使用时间戳命名：
 
 ```text
-~/Downloads/ApkHarden-screenshot-yyyyMMdd-HHmmss.png
-~/Downloads/ApkHarden-screenrecord-yyyyMMdd-HHmmss.mp4
-~/Downloads/ApkHarden-diagnostics-yyyyMMdd-HHmmss.zip
+~/Downloads/WorkKit-screenshot-yyyyMMdd-HHmmss.png
+~/Downloads/WorkKit-screenrecord-yyyyMMdd-HHmmss.mp4
+~/Downloads/WorkKit-diagnostics-yyyyMMdd-HHmmss.zip
 ```
 
 普通非 root 设备对系统日志和文件的访问有权限限制；诊断包会收集系统允许读取的信息，不能保证得到所有 ANR 堆栈。常见排障见 [FAQ](docs/FAQ.md)。
@@ -292,8 +294,8 @@ USB 使用前确认 `adb devices -l` 能列出目标设备且状态为 `device`�
 ### 获取源码并启动
 
 ```sh
-git clone https://github.com/dbmzn/ApkHarden.git
-cd ApkHarden
+git clone https://github.com/dbmzn/ApkHarden.git WorkKit
+cd WorkKit
 ```
 
 macOS / Linux：
@@ -349,8 +351,8 @@ APK_HARDEN_SCRCPY="$PWD/build/app-resources/macos/scrcpy/scrcpy" ./gradlew run
 
 | 产物 | 默认输出位置 |
 | --- | --- |
-| macOS 应用 | `build/compose/binaries/main/app/ApkHarden.app` |
-| Windows 应用目录 | `build/compose/binaries/main/app/ApkHarden/` |
+| macOS 应用 | `build/compose/binaries/main/app/WorkKit.app` |
+| Windows 应用目录 | `build/compose/binaries/main/app/WorkKit/` |
 | 安装包 | `build/compose/binaries/main/dmg/`、`msi/` 或 `deb/` |
 | 测试报告 | `build/reports/tests/test/index.html` |
 
@@ -362,7 +364,7 @@ APK_HARDEN_SCRCPY="$PWD/build/app-resources/macos/scrcpy/scrcpy" ./gradlew run
 ./gradlew deployToDesktop
 ```
 
-先退出已部署的应用。该任务会同步并替换部署目录：macOS 为 `~/Desktop/ApkHarden.app`，Windows 为 `~/ApkHarden`；开发过程中仅预览界面可使用 `run`。
+先退出已部署的应用。该任务会同步并替换部署目录：macOS 为 `~/Desktop/WorkKit.app`，Windows 为 `~/WorkKit`；开发过程中仅预览界面可使用 `run`。
 
 ## 命令行加固
 
@@ -442,6 +444,14 @@ flowchart LR
 
 修改 `guard/`、`shell/` 或 `native/` 后需要重建壳资源，再测试桌面加固与设备启动，不能仅编译桌面源码。现有脚本依赖 Windows Android 构建工具，详见[开发验证说明](docs/development.md#重建壳资源)。
 
+## 更名与升级
+
+- 中文名称为 **百工**，英文名称为 **`WorkKit`**；macOS 正式应用为 `WorkKit.app`，Windows 程序使用 `WorkKit` 名称。
+- 已有外观设置、签名配置与 macOS 钥匙串服务沿用原存储标识；源代码包名、Android 壳标识和 `APK_HARDEN_*` 环境变量保留兼容性。
+- GitHub 仓库当前仍位于 `dbmzn/ApkHarden`，本页下载、源码与问题反馈链接继续指向该仓库。
+- 手动升级时先退出旧版，将新应用安装到正式位置，确认可启动后移除旧的 `ApkHarden.app` 或旧程序目录，避免保留两个入口；已导出的文件无需改名。
+- 历史验证文档保留当时的应用名与路径，不代表当前分发包仍使用旧名。
+
 ## 反馈与贡献
 
 欢迎通过 [Issues](https://github.com/dbmzn/ApkHarden/issues) 提交问题或建议。请附上操作系统与架构、构建版本、复现步骤、错误信息；涉及设备时补充 Android 版本、ABI 和连接方式。优先使用可公开的最小测试 APK，勿附带正式 keystore、密码或业务敏感数据。
@@ -450,6 +460,6 @@ flowchart LR
 
 ## 致谢与许可
 
-界面布局与初始绿青配色参考 [AndroidToolKit](https://github.com/LazyIonEs/AndroidToolKit)。ApkHarden 保留自身的设备工具、APK 分析和加固流程，并提供独立皮肤库。
+界面布局与初始绿青配色参考 [AndroidToolKit](https://github.com/LazyIonEs/AndroidToolKit)。百工保留原有的设备工具、APK 分析和加固流程，并提供独立皮肤库。
 
 本项目使用 [Apache License 2.0](LICENSE)。第三方库及随包工具遵循各自许可证；scrcpy 的上游项目为 [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy)。macOS 图片工具目录保留各引擎的许可证、版权说明及对应源码归档，详见[图片引擎许可说明](docs/image-tools.md#构建与引擎)。

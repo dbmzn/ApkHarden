@@ -54,7 +54,7 @@ val downloadScrcpy by tasks.registering {
             val connection = URI(scrcpyDownloadUrl).toURL().openConnection().apply {
                 connectTimeout = 30_000
                 readTimeout = 300_000
-                setRequestProperty("User-Agent", "ApkHarden-build")
+                setRequestProperty("User-Agent", "WorkKit-build")
             }
             connection.getInputStream().buffered().use { input ->
                 temporary.outputStream().buffered().use(input::copyTo)
@@ -85,7 +85,7 @@ val prepareScrcpyResources by tasks.registering(Sync::class) {
     into(scrcpyAppResourcesRoot.map { it.dir("${if (isMac) "macos" else "windows"}/scrcpy") })
 }
 val prepareImageTools by tasks.registering(Exec::class) {
-    group = "apkharden"
+    group = "WorkKit"
     description = "Build and bundle local PNG/JPEG/WebP image engines on macOS."
     onlyIf { isMac }
     commandLine("python3", "scripts/prepare-image-tools.py")
@@ -151,23 +151,23 @@ kotlin { jvmToolchain(17) }
 //   ./gradlew harden --args="--input in.apk --output out.apk --keystore k.jks \
 //       --storePass p --alias a --keyPass p"
 tasks.register<JavaExec>("harden") {
-    group = "apkharden"
+    group = "WorkKit"
     description = "Run the harden pipeline headlessly (see CliKt)."
     mainClass.set("com.apkharden.packager.CliKt")
     classpath = sourceSets["main"].runtimeClasspath
 }
 
 // One-shot: rebuild the native app image and mirror it to the deployed copy the desktop
-// shortcut points at (~/ApkHarden). Sync deletes stale files so the deploy stays clean.
+// shortcut points at (~/WorkKit). Sync deletes stale files so the deploy stays clean.
 //   ./gradlew deployToDesktop      (close the running app first, or the .exe stays locked)
 tasks.register<Sync>("deployToDesktop") {
-    group = "apkharden"
-    description = "Build the distributable and mirror it to the deployed ~/ApkHarden copy."
+    group = "WorkKit"
+    description = "Build the distributable and mirror it to the deployed ~/WorkKit copy."
     dependsOn("createDistributable")
-    val deployDir = File(System.getProperty("user.home"), if (isMac) "Desktop/ApkHarden.app" else "ApkHarden")
+    val deployDir = File(System.getProperty("user.home"), if (isMac) "Desktop/WorkKit.app" else "WorkKit")
     // jpackage marks the launcher .exe read-only; clear it so the mirror can overwrite in place.
     doFirst { deployDir.walkTopDown().forEach { it.setWritable(true) } }
-    from(layout.buildDirectory.dir("compose/binaries/main/app/${if (isMac) "ApkHarden.app" else "ApkHarden"}"))
+    from(layout.buildDirectory.dir("compose/binaries/main/app/${if (isMac) "WorkKit.app" else "WorkKit"}"))
     into(deployDir)
 }
 
@@ -176,7 +176,16 @@ compose.desktop {
         mainClass = "com.apkharden.packager.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
-            packageName = "ApkHarden"
+            packageName = "WorkKit"
+            description = "百工WorkKit — 设备与开发工具箱"
+            macOS {
+                // Keep the installed app identity and existing Preferences/Keychain namespace.
+                bundleID = "com.apkharden.packager"
+                dockName = "百工WorkKit"
+                infoPlist {
+                    extraKeysRawXml = "<key>CFBundleDisplayName</key><string>百工WorkKit</string>"
+                }
+            }
             packageVersion = "1.0.0"
             appResourcesRootDir.set(scrcpyAppResourcesRoot)
             // LWJGL (NFD) needs sun.misc.Unsafe from jdk.unsupported; jlink drops it by default,
@@ -199,7 +208,7 @@ tasks.configureEach {
         inputs.property("macExecutableResources", 1)
         doLast {
             if (isMac) {
-                val resources = layout.buildDirectory.dir("compose/binaries/main/app/ApkHarden.app/Contents/app/resources/scrcpy").get().asFile
+                val resources = layout.buildDirectory.dir("compose/binaries/main/app/WorkKit.app/Contents/app/resources/scrcpy").get().asFile
                 listOf("scrcpy", "adb").forEach { name ->
                     check(File(resources, name).setExecutable(true, false)) { "Cannot mark $name executable" }
                 }

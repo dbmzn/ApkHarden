@@ -1,5 +1,6 @@
 package com.apkharden.packager.ui
 
+import com.apkharden.packager.ProductIdentity
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.VerticalScrollbar
@@ -161,10 +162,10 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit, onAp
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxHeight().width(104.dp).padding(top = 12.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        TooltipArea(tooltip = { NavTooltip("ApkHarden · 设备与开发工具箱") }) {
+        TooltipArea(tooltip = { NavTooltip("${ProductIdentity.TITLE} · 设备与开发工具箱") }) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(13.dp)).background(sem.accentBg),
                 contentAlignment = Alignment.Center) {
-                Icon(ToolIcons.Shield, "ApkHarden", Modifier.size(23.dp), tint = sem.onAccent)
+                Icon(ToolIcons.Shield, ProductIdentity.TITLE, Modifier.size(23.dp), tint = sem.onAccent)
             }
         }
         Spacer(Modifier.height(14.dp))

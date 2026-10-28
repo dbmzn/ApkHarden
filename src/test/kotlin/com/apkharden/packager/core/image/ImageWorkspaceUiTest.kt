@@ -26,7 +26,7 @@ class ImageWorkspaceUiTest {
         val fixture = BufferedImage(640, 420, BufferedImage.TYPE_INT_ARGB)
         val g = fixture.createGraphics()
         g.color = Color(46, 135, 100, 160); g.fillRoundRect(60, 70, 520, 280, 90, 90)
-        g.color = Color(20, 50, 40); g.font = g.font.deriveFont(34f); g.drawString("ApkHarden · 图片压缩", 100, 230); g.dispose()
+        g.color = Color(20, 50, 40); g.font = g.font.deriveFont(34f); g.drawString("百工WorkKit · 图片压缩", 100, 230); g.dispose()
         ImageIO.write(fixture, "png", input)
         try {
             setContent { AppTheme(dark = dark.value) { Surface { DeveloperToolsScreen(state) } } }

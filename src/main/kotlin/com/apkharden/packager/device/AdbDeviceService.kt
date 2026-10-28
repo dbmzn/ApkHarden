@@ -1,5 +1,6 @@
 package com.apkharden.packager.device
 
+import com.apkharden.packager.ProductIdentity
 import java.awt.Color
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
@@ -368,7 +369,7 @@ internal object AdbDeviceService {
         output.parentFile?.mkdirs()
         val entries = linkedMapOf<String, () -> String>(
             "summary.txt" to {
-                "ApkHarden 崩溃与 ANR 采集包\n" +
+                "${ProductIdentity.TITLE} 崩溃与 ANR 采集包\n" +
                     "设备：${device.model}\n序列号：${device.serial}\nAPI：${device.api}\n" +
                     "ABI：${device.abis}\n包名：$target\n" +
                     "说明：普通非 root 设备无法直接读取 /data/anr/traces.txt，已改为采集 lastanr、DropBox、日志和系统服务状态。\n"

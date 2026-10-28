@@ -12,13 +12,14 @@ import com.apkharden.packager.ui.App
 import javax.swing.UIManager
 
 fun main() {
+    System.setProperty("apple.awt.application.name", ProductIdentity.TITLE)
     // Render the Swing file chooser with the native Windows look instead of the dated Metal theme.
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
     application {
         var developerToolsShortcut by remember { mutableStateOf(0) }
         Window(
             onCloseRequest = ::exitApplication,
-            title = "ApkHarden",
+            title = ProductIdentity.TITLE,
             onPreviewKeyEvent = { event ->
                 if (event.type == KeyEventType.KeyDown && event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed)) {
                     developerToolsShortcut++

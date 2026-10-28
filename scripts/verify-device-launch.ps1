@@ -61,7 +61,7 @@ if ($activities -notmatch "(?m)(mResumedActivity|topResumedActivity|ResumedActiv
     throw "No resumed activity found for $PackageName after $WaitSeconds seconds.`n$crashLog"
 }
 if ($crashLog -match 'FATAL EXCEPTION|Fatal signal|UnsatisfiedLinkError|APH-E\d{3}') {
-    throw "Crash or ApkHarden initialization error detected.`n$crashLog"
+    throw "Crash or WorkKit runtime initialization error detected.`n$crashLog"
 }
 
 Write-Host "PASS package=$PackageName serial=$Serial api=$api pageSize=$pageSize abis=$abis pid=$appPid"

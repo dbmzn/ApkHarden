@@ -133,12 +133,12 @@ class AdbDeviceServiceTest {
 
     @Test
     fun `scrcpy mirror keeps control enabled and uses a dedicated window title`() {
-        val args = buildScrcpyMirrorArgs("device serial", "ApkHarden mirror", 900, 560)
+        val args = buildScrcpyMirrorArgs("device serial", "WorkKit mirror", 900, 560)
 
         assertEquals(
             listOf(
                 "--serial", "device serial",
-                "--window-title", "ApkHarden mirror",
+                "--window-title", "WorkKit mirror",
                 "--window-width", "900",
                 "--window-height", "560",
                 "--shortcut-mod", "lctrl",
@@ -156,7 +156,7 @@ class AdbDeviceServiceTest {
     fun `large tablet mirror caps the video encoder before launch`() {
         val args = buildScrcpyMirrorArgs(
             serial = "tablet",
-            windowTitle = "ApkHarden tablet",
+            windowTitle = "WorkKit tablet",
             windowWidth = 2560,
             windowHeight = 1600,
             maxVideoSize = 1920,
