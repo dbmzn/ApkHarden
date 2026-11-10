@@ -15,6 +15,8 @@ plugins {
 
 val scrcpyVersion = "3.3.4"
 val isMac = System.getProperty("os.name").startsWith("Mac", ignoreCase = true)
+// Keep build-only app bundles out of Spotlight's application results on macOS.
+val nativeBinariesDir = layout.buildDirectory.dir(if (isMac) "compose/binaries.noindex" else "compose/binaries")
 val isArm64 = System.getProperty("os.arch") in listOf("aarch64", "arm64")
 val scrcpyArchiveName = if (isMac) "scrcpy-macos-${if (isArm64) "aarch64" else "x86_64"}-v$scrcpyVersion.tar.gz"
     else "scrcpy-win64-v$scrcpyVersion.zip"
@@ -167,7 +169,7 @@ tasks.register<Sync>("deployToDesktop") {
     val deployDir = File(System.getProperty("user.home"), if (isMac) "Desktop/WorkKit.app" else "WorkKit")
     // jpackage marks the launcher .exe read-only; clear it so the mirror can overwrite in place.
     doFirst { deployDir.walkTopDown().forEach { it.setWritable(true) } }
-    from(layout.buildDirectory.dir("compose/binaries/main/app/${if (isMac) "WorkKit.app" else "WorkKit"}"))
+    from(nativeBinariesDir.map { it.dir("main/app/${if (isMac) "WorkKit.app" else "WorkKit"}") })
     into(deployDir)
 }
 
@@ -175,10 +177,18 @@ compose.desktop {
     application {
         mainClass = "com.apkharden.packager.MainKt"
         nativeDistributions {
+            outputBaseDir.set(nativeBinariesDir)
             targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
             packageName = "WorkKit"
             description = "百工WorkKit — 设备与开发工具箱"
+            windows {
+                iconFile.set(project.file("packaging/icons/workkit.ico"))
+            }
+            linux {
+                iconFile.set(project.file("src/main/resources/icons/workkit.png"))
+            }
             macOS {
+                iconFile.set(project.file("packaging/icons/workkit.icns"))
                 // Keep the installed app identity and existing Preferences/Keychain namespace.
                 bundleID = "com.apkharden.packager"
                 dockName = "百工WorkKit"
@@ -208,7 +218,7 @@ tasks.configureEach {
         inputs.property("macExecutableResources", 1)
         doLast {
             if (isMac) {
-                val resources = layout.buildDirectory.dir("compose/binaries/main/app/WorkKit.app/Contents/app/resources/scrcpy").get().asFile
+                val resources = nativeBinariesDir.get().dir("main/app/WorkKit.app/Contents/app/resources/scrcpy").asFile
                 listOf("scrcpy", "adb").forEach { name ->
                     check(File(resources, name).setExecutable(true, false)) { "Cannot mark $name executable" }
                 }

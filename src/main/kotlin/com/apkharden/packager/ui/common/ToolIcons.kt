@@ -14,6 +14,8 @@ object ToolIcons {
         .addPath(addPathNodes(path), fill = null, stroke = SolidColor(Color.Black),
             strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round).build()
 
+    // In-app rendition of the interleaved app mark, using the same strokes as navigation.
+    val WorkKit = icon("WorkKit", "M3 9L15 3V8L3 14Z M9 16L21 10V15L9 21Z M3 14L9 17 M15 7L21 10")
     val Capture = icon("Capture", "M4 7H7L9 4H15L17 7H20Q22 7 22 9V19Q22 21 20 21H4Q2 21 2 19V9Q2 7 4 7Z M16 13A4 4 0 1 1 8 13A4 4 0 1 1 16 13")
     val Mirror = icon("Mirror", "M3 3H21V17H3Z M8 21H16 M12 17V21 M10 7L16 10L10 13Z")
     val Clipboard = icon("Clipboard", "M8 5H5V22H19V5H16 M8 2H16V7H8Z M8 12H16 M8 16H14")

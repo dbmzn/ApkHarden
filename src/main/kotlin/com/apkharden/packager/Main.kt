@@ -3,6 +3,7 @@ package com.apkharden.packager
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
@@ -10,16 +11,27 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.apkharden.packager.ui.App
 import javax.swing.UIManager
+import java.awt.Taskbar
+import javax.imageio.ImageIO
 
 fun main() {
     System.setProperty("apple.awt.application.name", ProductIdentity.TITLE)
     // Render the Swing file chooser with the native Windows look instead of the dated Metal theme.
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+    // Also brand the Dock when launched via Gradle or the IDE instead of the native launcher.
+    if (Taskbar.isTaskbarSupported()) {
+        val taskbar = Taskbar.getTaskbar()
+        if (taskbar.isSupported(Taskbar.Feature.ICON_IMAGE)) {
+            val icon = checkNotNull(ProductIdentity::class.java.getResource("/icons/workkit.png"))
+            taskbar.iconImage = ImageIO.read(icon)
+        }
+    }
     application {
         var developerToolsShortcut by remember { mutableStateOf(0) }
         Window(
             onCloseRequest = ::exitApplication,
             title = ProductIdentity.TITLE,
+            icon = painterResource("icons/workkit.png"),
             onPreviewKeyEvent = { event ->
                 if (event.type == KeyEventType.KeyDown && event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed)) {
                     developerToolsShortcut++

@@ -351,12 +351,15 @@ APK_HARDEN_SCRCPY="$PWD/build/app-resources/macos/scrcpy/scrcpy" ./gradlew run
 
 | 产物 | 默认输出位置 |
 | --- | --- |
-| macOS 应用 | `build/compose/binaries/main/app/WorkKit.app` |
+| macOS 应用 | `build/compose/binaries.noindex/main/app/WorkKit.app` |
 | Windows 应用目录 | `build/compose/binaries/main/app/WorkKit/` |
-| 安装包 | `build/compose/binaries/main/dmg/`、`msi/` 或 `deb/` |
+| 安装包 | macOS：`build/compose/binaries.noindex/main/dmg/`；Windows/Linux：`build/compose/binaries/main/msi/` 或 `deb/` |
 | 测试报告 | `build/reports/tests/test/index.html` |
 
 安装包应在目标操作系统上构建，按当前构建环境生成本机架构产物。自带运行时的应用不要求最终使用者另装 JDK。打包脚本显式保留 `jdk.unsupported` 模块，供原生文件选择依赖使用。
+
+macOS 构建目录使用 `.noindex` 后缀，避免构建副本被 Spotlight 收录为重复应用。
+旧版备份应保存为 ZIP，避免留下可被索引的额外 `.app`。
 
 本机部署：
 

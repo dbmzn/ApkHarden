@@ -163,9 +163,9 @@ private fun Sidebar(selected: Destination, onSelect: (Destination) -> Unit, onAp
     Column(Modifier.fillMaxHeight().width(104.dp).padding(top = 12.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         TooltipArea(tooltip = { NavTooltip("${ProductIdentity.TITLE} · 设备与开发工具箱") }) {
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(13.dp)).background(sem.accentBg),
-                contentAlignment = Alignment.Center) {
-                Icon(ToolIcons.Shield, ProductIdentity.TITLE, Modifier.size(23.dp), tint = sem.onAccent)
+            Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                Icon(ToolIcons.WorkKit, ProductIdentity.TITLE, Modifier.size(26.dp),
+                    tint = MaterialTheme.colors.primary)
             }
         }
         Spacer(Modifier.height(14.dp))
